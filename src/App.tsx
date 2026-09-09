@@ -1,5 +1,6 @@
 import { useRef, useState, type FormEvent } from 'react'
 import { useRegisterSW } from 'virtual:pwa-register/react'
+import { verifyAppPassword } from './features/app-lock/verifyAppPassword'
 import type { DropboxVaultFile } from './features/dropbox/types'
 import { useDropbox } from './features/dropbox/useDropbox'
 import { usePwaLifecycle } from './features/pwa/usePwaLifecycle'
@@ -127,7 +128,54 @@ function BrandMark({ className = '' }: { className?: string }) {
   )
 }
 
-function App() {
+function AppLock({ onUnlock }: { onUnlock: () => void }) {
+  const [showPassword, setShowPassword] = useState(false)
+  const [isChecking, setIsChecking] = useState(false)
+  const [error, setError] = useState('')
+
+  async function unlock(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const form = event.currentTarget
+    const password = String(new FormData(form).get('appPassword') ?? '')
+    form.reset()
+    setIsChecking(true)
+    setError('')
+    try {
+      if (await verifyAppPassword(password)) onUnlock()
+      else setError('That app password is not correct.')
+    } finally {
+      setIsChecking(false)
+    }
+  }
+
+  return (
+    <div className="app-frame app-lock-frame">
+      <header className="app-lock-brand"><BrandMark /><span><strong>Meridium</strong><small>Keys</small></span></header>
+      <main className="app-lock-stage">
+        <form className="focus-card app-lock-card" onSubmit={unlock}>
+          <div className="security-emblem"><Icon name="lock" size={31} /></div>
+          <div className="card-copy">
+            <p className="eyebrow">App locked</p>
+            <h1>Unlock Meridium Keys</h1>
+            <p className="lede">Enter the app password to connect storage or open a vault.</p>
+          </div>
+          <label className="field">
+            <span>App password</span>
+            <div className="secret-input">
+              <input autoFocus autoComplete="current-password" disabled={isChecking} name="appPassword" required type={showPassword ? 'text' : 'password'} />
+              <button aria-label={showPassword ? 'Hide app password' : 'Show app password'} onClick={() => setShowPassword((current) => !current)} type="button"><Icon name={showPassword ? 'eye-off' : 'eye'} /></button>
+            </div>
+          </label>
+          {error && <p className="unlock-error" role="alert">{error}</p>}
+          <button className="button button-primary button-wide" disabled={isChecking} type="submit"><Icon name="key" />{isChecking ? 'Checking…' : 'Unlock app'}</button>
+        </form>
+      </main>
+      <UpdatePrompt />
+    </div>
+  )
+}
+
+function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
   const [view, setView] = useState<View>('connect')
   const [selectedFile, setSelectedFile] = useState('')
   const [vaultName, setVaultName] = useState('')
@@ -240,20 +288,28 @@ function App() {
     <div className={`app-frame ${sidebarCollapsed ? 'has-collapsed-sidebar' : ''}`}>
       <aside className={`vault-sidebar ${sidebarCollapsed ? 'is-collapsed' : ''}`} aria-label="Vault navigation">
         <div className="sidebar-header">
-          <button className="brand-button" aria-label="Meridium Keys home" onClick={() => setView('connect')} title="Meridium Keys" type="button">
+          <button
+            className="brand-button"
+            aria-label={sidebarCollapsed ? 'Expand vault navigation' : 'Meridium Keys home'}
+            onClick={() => sidebarCollapsed ? setSidebarCollapsed(false) : setView('connect')}
+            title={sidebarCollapsed ? 'Expand sidebar' : 'Meridium Keys'}
+            type="button"
+          >
             <BrandMark />
             <span className="sidebar-brand-copy"><strong>Meridium</strong><small>Keys</small></span>
           </button>
-          <button
-            className="sidebar-collapse"
-            aria-label={sidebarCollapsed ? 'Expand vault navigation' : 'Collapse vault navigation'}
-            aria-expanded={!sidebarCollapsed}
-            onClick={() => setSidebarCollapsed((current) => !current)}
-            title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            type="button"
-          >
-            <Icon name={sidebarCollapsed ? 'chevron-right' : 'chevron-left'} size={18} />
-          </button>
+          {!sidebarCollapsed && (
+            <button
+              className="sidebar-collapse"
+              aria-label="Collapse vault navigation"
+              aria-expanded="true"
+              onClick={() => setSidebarCollapsed(true)}
+              title="Collapse sidebar"
+              type="button"
+            >
+              <Icon name="chevron-left" size={18} />
+            </button>
+          )}
         </div>
 
         <nav className="vault-navigation">
@@ -311,9 +367,12 @@ function App() {
       <main className="workspace">
         <header className="topbar">
           <strong className="workspace-title">{workspaceTitle}</strong>
-          <div className={`connection-status ${pwa.isOnline && dropboxConnected ? 'is-connected' : ''} ${!pwa.isOnline ? 'is-offline' : ''}`}>
-            <span className="status-dot" />
-            <span>{!pwa.isOnline ? 'Offline' : dropbox.status === 'connecting' || dropbox.status === 'loading' ? 'Connecting Dropbox' : dropboxConnected ? 'Dropbox ready' : 'Not connected'}</span>
+          <div className="topbar-actions">
+            <div className={`connection-status ${pwa.isOnline && dropboxConnected ? 'is-connected' : ''} ${!pwa.isOnline ? 'is-offline' : ''}`}>
+              <span className="status-dot" />
+              <span>{!pwa.isOnline ? 'Offline' : dropbox.status === 'connecting' || dropbox.status === 'loading' ? 'Connecting Dropbox' : dropboxConnected ? 'Dropbox ready' : 'Not connected'}</span>
+            </div>
+            <button className="topbar-lock" aria-label="Lock Meridium Keys" onClick={onLockApp} title="Lock app" type="button"><Icon name="lock" size={18} /></button>
           </div>
         </header>
 
@@ -451,6 +510,24 @@ function App() {
       <UpdatePrompt />
     </div>
   )
+}
+
+const appLockSessionKey = 'meridium-keys-app-unlocked'
+
+function App() {
+  const [isUnlocked, setIsUnlocked] = useState(() => sessionStorage.getItem(appLockSessionKey) === 'true')
+
+  function unlockApp() {
+    sessionStorage.setItem(appLockSessionKey, 'true')
+    setIsUnlocked(true)
+  }
+
+  function lockApp() {
+    sessionStorage.removeItem(appLockSessionKey)
+    setIsUnlocked(false)
+  }
+
+  return isUnlocked ? <KeysWorkspace onLockApp={lockApp} /> : <AppLock onUnlock={unlockApp} />
 }
 
 export default App

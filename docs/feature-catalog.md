@@ -24,6 +24,11 @@ future possibilities.
 
 **Proposed:**
 
+- Give each vault a user-selected icon key stored as non-sensitive metadata in
+  `metadata/vaults.json`, keyed by stable Dropbox file ID. This keeps the icon
+  visible while the KDBX file is locked and synchronized across devices.
+- After unlock, offer the KDBX root group's standard or custom icon as an import
+  choice. Do not require or rewrite that KDBX icon merely to decorate the rail.
 - Show locked, unlocked, syncing, offline, conflicted, and error states on the
   vault icon using both text/shape and color.
 - Require explicit confirmation before removing a vault.

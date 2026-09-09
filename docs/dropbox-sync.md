@@ -48,6 +48,11 @@ The final layout depends on whether standard KDBX compatibility and the separate
 recovery-record design are approved. `vaults.json` must not contain item names,
 usernames, URLs, tags, or other decrypted vault content.
 
+An optional vault icon key may be stored in `vaults.json`, keyed by stable
+Dropbox file ID. It is presentation metadata, contains no vault content, and
+allows the icon to render before decryption. The encrypted KDBX root group can
+also carry a standard or custom icon, but it is only readable after unlock.
+
 ## Local storage
 
 IndexedDB may contain:

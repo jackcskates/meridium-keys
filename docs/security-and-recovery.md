@@ -5,6 +5,20 @@ required before production use.
 
 ## Trust model
 
+### Temporary application lock
+
+The current PWA requires an app password once per browser/PWA session. Source
+contains only a salted PBKDF2-SHA-256 verifier; the plaintext password is not
+committed. Successful unlock is remembered in `sessionStorage`, and explicit
+App Lock removes that flag and unmounts the Dropbox/vault workspace so its
+memory-only session data is released.
+
+This is a temporary casual-access gate, not server authentication. Because the
+entire static client is delivered to the device, a determined person can alter
+the client or perform an offline guessing attack against its verifier. The
+approved replacement is the per-device App Lock envelope, where a derived key
+encrypts persisted Dropbox authorization and cached KDBX bytes.
+
 - The user's device performs vault decryption and encryption.
 - Dropbox is trusted to transport and retain bytes, but not to see vault
   contents.

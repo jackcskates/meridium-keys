@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "icons:generate": "sh scripts/generate-app-icons.sh",
     "lint": "oxlint",
     "preview": "vite preview",
     "test": "vitest run",

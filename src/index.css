@@ -17,11 +17,11 @@
   --contrast-black: #000;
   --contrast-white: #fff;
 
-  /* Canonical Meridium symbol color. Never substitute an invented app accent. */
-  --brand-meridium: #e8614d;
-  --brand-meridium-hover: #ef765f;
-  --brand-meridium-soft: rgba(232, 97, 77, 0.1);
-  --brand-meridium-border: rgba(232, 97, 77, 0.32);
+  /* Owner-approved Keys green: HSV saturation/value match the former coral. */
+  --brand-meridium: #4de89a;
+  --brand-meridium-hover: #5fefa7;
+  --brand-meridium-soft: rgba(77, 232, 154, 0.1);
+  --brand-meridium-border: rgba(77, 232, 154, 0.32);
 
   --surface-page: var(--neutral-000);
   --surface-rail: var(--contrast-black);

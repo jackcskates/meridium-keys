@@ -32,10 +32,12 @@ for careful credential work, with lock and sync status always explicit.
 ## Meridium visual rules
 
 - Use the real Meridium symbol in the application lockup and installable app icons.
-- The symbol color is `#e8614d`. No invented accent colors are permitted.
+- The Keys symbol color is the owner-approved green `#4de89a`; it preserves the
+  former coral's HSV saturation and brightness while changing only its hue.
+  No additional accent colors are permitted without owner approval.
 - The main interface is monochrome: `#0f0f0f` canvas, `#252525` surfaces,
   `#3a3a3a` raised/input surfaces, and the exact Style Lab neutral text ramp.
-- Coral is limited to the mark and restrained selection/emphasis cues. Primary
+- Green is limited to the mark and restrained selection/emphasis cues. Primary
   actions follow the Actions lab and remain light-on-dark, not coral-filled.
 - Plus Jakarta Sans is the content face; Inter is the system/control face.
 - Cards use a 1rem radius; controls use 0.75rem; touch targets are at least
@@ -51,6 +53,9 @@ for careful credential work, with lock and sync status always explicit.
   “All vaults,” storage-provider sections, vault name and lock state, “New vault,”
   and Dropbox connection status. Collapsed mode preserves the same destinations
   as accessible icon controls.
+- In collapsed mode, the Meridium symbol is the expand control; no separate
+  expand arrow competes for rail space. Rail icons share one center line and
+  comparable optical size.
 - The main workspace belongs to the selected vault.
 - Search is prominent after unlock.
 - Item results and item details use the remaining space responsively.

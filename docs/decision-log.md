@@ -67,6 +67,28 @@ they never existed; mark them superseded and link to the replacement.
   second copy of security-sensitive data. Encrypted offline vault retention must
   wait for the per-device App Lock envelope.
 
+### D-017 - Keys accent and collapsed rail behavior
+
+- **Status:** Accepted
+- **Decision:** Use `#4de89a` for the Meridium Keys mark and restrained accent
+  cues. It matches the former coral's HSV saturation and brightness at a green
+  hue. In the collapsed rail, clicking the centered Meridium mark expands the
+  navigation; no separate expand arrow is shown.
+- **Reason:** Owner-approved product variation and a cleaner, consistently
+  aligned compact navigation rail.
+
+### D-018 - Temporary client-side App Lock
+
+- **Status:** Accepted as temporary
+- **Decision:** Require an app password once per PWA session using a salted,
+  slow PBKDF2 verifier. Never commit the plaintext password. Explicit App Lock
+  clears the session flag and unmounts the active workspace.
+- **Reason:** Provide an immediate casual-access gate without introducing a
+  Meridium account or proprietary runtime.
+- **Limitation:** Static client verification is bypassable and supports offline
+  guessing. Replace it with the reviewed encrypted App Lock envelope; use
+  server-side access control separately if the deployment itself must be private.
+
 ## Open
 
 ### D-005 - Standard KDBX compatibility

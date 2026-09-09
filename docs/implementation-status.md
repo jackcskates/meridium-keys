@@ -9,6 +9,8 @@ Last verified: 2026-09-09.
   Meridium icons, iOS standalone metadata, native Chromium install prompting,
   iPhone/iPad installation guidance, and an explicit update prompt.
 - Phone safe-area handling plus live online/offline Dropbox status and reconnect.
+- Temporary session App Lock with a slow PBKDF2 verifier and explicit Lock App
+  action. The plaintext app password is not committed.
 - Responsive Meridium application frame with a collapsible vault sidebar.
 - Local `.kdbx` selection with extension and 64 MB size validation.
 - Read-only KDBX 4 unlock for password-protected Argon2id, Argon2d, and AES-KDF vaults.
@@ -33,6 +35,8 @@ Last verified: 2026-09-09.
 - The service worker precaches versioned app-shell assets only; it has no runtime
   caching rule for Dropbox responses, vault files, tokens, or decrypted data.
 - No production credentials or real vault samples are committed.
+- The temporary client-side App Lock deters casual access only. It is not a
+  server authentication boundary and does not yet encrypt persistent data.
 
 ## Compatibility evidence
 
