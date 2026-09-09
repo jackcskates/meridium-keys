@@ -24,6 +24,9 @@ Last verified: 2026-09-09.
 - Recursive discovery of standard KDBX files in the app folder.
 - Direct download of selected encrypted KDBX bytes into the existing local unlock worker.
 - Explicit connected, connecting, loading, empty, error, and session-disconnect states.
+- Dropbox developer settings verified with production and local PKCE callback
+  URIs; an end-to-end authorization returned to the PWA and loaded the empty
+  App Folder successfully.
 
 ## Verified boundaries
 

@@ -1,4 +1,4 @@
-import { access, readFile } from 'node:fs/promises'
+import { access, readFile, stat } from 'node:fs/promises'
 import { resolve } from 'node:path'
 
 const root = resolve(import.meta.dirname, '..')
@@ -29,5 +29,14 @@ await Promise.all([
   access(resolve(dist, 'icon-192x192.png')),
   access(resolve(dist, 'icon-512x512.png')),
 ])
+
+const renderedIconSizes = await Promise.all([
+  stat(resolve(dist, 'apple-touch-icon.png')),
+  stat(resolve(dist, 'icon-192x192.png')),
+  stat(resolve(dist, 'icon-512x512.png')),
+  stat(resolve(dist, 'icon-192x192-maskable.png')),
+  stat(resolve(dist, 'icon-512x512-maskable.png')),
+])
+assert(renderedIconSizes.every((icon) => icon.size > 3_000), 'an app icon appears to be blank or incomplete')
 
 console.log('PWA verification passed: manifest, service worker, iOS metadata, and install icons are present.')
