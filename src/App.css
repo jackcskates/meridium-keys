@@ -154,6 +154,8 @@
 .sidebar-connection:hover,
 .sidebar-connection:focus-visible { color: var(--text-primary); background: var(--surface-1); }
 
+.sidebar-row:disabled { opacity: 0.62; cursor: wait; }
+
 .sidebar-row.is-active { background: var(--surface-1); }
 
 .sidebar-row.is-active::before {
@@ -519,6 +521,47 @@ h1 {
 .empty-vaults > div { display: flex; flex-direction: column; gap: 2px; }
 .empty-vaults span { color: var(--text-tertiary); font-size: 0.78rem; }
 .icon-button { width: 38px; height: 38px; border-style: solid; }
+
+.dropbox-vault-list {
+  display: grid;
+  gap: 8px;
+}
+
+.dropbox-vault-list > button {
+  width: 100%;
+  min-height: 66px;
+  padding: 10px 12px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  color: var(--text-secondary);
+  background: var(--surface-1);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-control);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dropbox-vault-list > button:hover,
+.dropbox-vault-list > button:focus-visible {
+  color: var(--text-primary);
+  background: var(--surface-hover);
+  border-color: var(--border-strong);
+}
+
+.dropbox-vault-list > button:disabled { opacity: 0.62; cursor: wait; }
+.dropbox-vault-list > button > span:nth-child(2) { min-width: 0; display: grid; gap: 3px; }
+.dropbox-vault-list strong,
+.dropbox-vault-list small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dropbox-vault-list strong { color: var(--text-primary); font-size: 0.9rem; }
+.dropbox-vault-list small { color: var(--text-tertiary); font-size: 0.72rem; }
+.dropbox-vault-list > button > span:last-child { font-size: 0.76rem; font-weight: 700; }
 
 .back-button, .text-button {
   width: fit-content;

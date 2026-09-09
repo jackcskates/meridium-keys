@@ -47,6 +47,16 @@ they never existed; mark them superseded and link to the replacement.
 - **Reason:** It establishes clarity, hierarchy, consistency, and user-centered
   design as project standards.
 
+### D-015 - Initial Dropbox session
+
+- **Status:** Accepted for the read-only compatibility slice
+- **Decision:** Use authorization-code OAuth with PKCE and a short-lived,
+  memory-only Dropbox access token. Do not request or persist a refresh token yet.
+- **Reason:** This enables real App Folder discovery and encrypted KDBX download
+  without storing a bearer credential before App Lock encryption exists.
+- **Replacement condition:** Once App Lock is implemented and reviewed, replace
+  session-only authorization with an encrypted refresh-token envelope.
+
 ## Open
 
 ### D-005 - Standard KDBX compatibility

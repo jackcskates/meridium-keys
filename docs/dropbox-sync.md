@@ -12,19 +12,23 @@ Music credentials, Swift-specific code, or media-library behavior.
 
 ## Authentication
 
-**Proposed:**
+**Implemented for the current read-only connection:**
 
-- Register a separate Dropbox application for Meridium Keys.
-- Prefer App Folder access.
-- Use authorization code + PKCE in the browser.
-- Include the public app key in configuration; never ship an app secret.
-- Request only the scopes required to list, download, and upload files in the
-  application folder.
-- Treat account change or disconnect as an explicit security event.
+- The scoped Dropbox application uses App Folder access. Its physical account
+  folder is `/Apps/Meridium Keys`; API paths are relative to that root.
+- Authorization uses code flow with PKCE S256 and no app secret.
+- The production redirect is `https://keys.meridium.app/`; the local redirect is
+  `http://127.0.0.1:5175/`.
+- The initial token is short-lived and memory-only. Closing or terminating the
+  PWA requires connecting again.
+- The client recursively lists metadata, filters standard `.kdbx` files, and
+  downloads a selected encrypted file directly into the local unlock worker.
+- Current scopes are `account_info.read`, `files.metadata.read`,
+  `files.content.read`, and `files.content.write`. Write remains unused until the
+  revision-safe save slice is implemented.
 
-Token persistence and refresh behavior require a focused threat-model decision.
-A PWA cannot keep a browser-held refresh token as safely as a server-held
-credential.
+**Next:** request offline access only after the per-device App Lock can encrypt a
+refresh token at rest. A plaintext refresh token must never be persisted.
 
 ## Remote layout
 

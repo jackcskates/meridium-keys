@@ -1,5 +1,7 @@
 import { useRef, useState, type FormEvent } from 'react'
 import { useRegisterSW } from 'virtual:pwa-register/react'
+import type { DropboxVaultFile } from './features/dropbox/types'
+import { useDropbox } from './features/dropbox/useDropbox'
 import { VaultBrowser } from './features/vault/VaultBrowser'
 import { VaultOpenError } from './features/vault/kdbx'
 import type { VaultSnapshot } from './features/vault/types'
@@ -93,27 +95,34 @@ function App() {
   const [showPassword, setShowPassword] = useState(false)
   const [formTouched, setFormTouched] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => window.matchMedia('(max-width: 720px)').matches)
-  const [dropboxConnected, setDropboxConnected] = useState(false)
+  const dropbox = useDropbox()
   const [selectedVaultFile, setSelectedVaultFile] = useState<File | null>(null)
+  const [selectedStorage, setSelectedStorage] = useState<'device' | 'dropbox' | null>(null)
+  const [activeDropboxVaultId, setActiveDropboxVaultId] = useState('')
+  const [openingDropboxVaultId, setOpeningDropboxVaultId] = useState('')
   const [vaultSnapshot, setVaultSnapshot] = useState<VaultSnapshot | null>(null)
   const [unlockError, setUnlockError] = useState('')
   const [unlockStage, setUnlockStage] = useState<UnlockStage | null>(null)
   const [isUnlocking, setIsUnlocking] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const dropboxConnected = dropbox.isConnected
+  const totalVaults = dropbox.vaults.length + (selectedStorage === 'device' && selectedFile ? 1 : 0)
+  const activeView = dropbox.isConnected && view === 'connect' ? 'vaults' : view
 
   const passwordsMatch = password.length > 0 && password === confirmation
   const createIsValid = vaultName.trim().length > 0 && password.length >= 12 && passwordsMatch
-  const workspaceTitle = view === 'connect'
+  const workspaceTitle = activeView === 'connect'
     ? 'Connect storage'
-    : view === 'vaults'
+    : activeView === 'vaults'
       ? 'All vaults'
-      : view === 'create'
+      : activeView === 'create'
         ? 'Create vault'
         : selectedFile.replace(/\.kdbx$/i, '') || 'Unlock vault'
 
-  function openFile(file?: File) {
+  function openFile(file?: File, storage: 'device' | 'dropbox' = 'device') {
     if (!file) return
     setSelectedFile(file.name)
+    setSelectedStorage(storage)
     setVaultSnapshot(null)
     setUnlockError('')
     if (!file.name.toLowerCase().endsWith('.kdbx')) {
@@ -123,6 +132,20 @@ function App() {
       setSelectedVaultFile(file)
     }
     setView('unlock')
+  }
+
+  async function openDropboxVault(vault: DropboxVaultFile) {
+    setOpeningDropboxVaultId(vault.id)
+    try {
+      const file = await dropbox.download(vault)
+      setActiveDropboxVaultId(vault.id)
+      openFile(file, 'dropbox')
+    } catch (error) {
+      setUnlockError(error instanceof Error ? error.message : `${vault.name} could not be opened from Dropbox.`)
+      setView('vaults')
+    } finally {
+      setOpeningDropboxVaultId('')
+    }
   }
 
   async function submitUnlock(event: FormEvent<HTMLFormElement>) {
@@ -193,19 +216,19 @@ function App() {
 
         <nav className="vault-navigation">
           <button
-            className={`sidebar-row sidebar-row-all ${view === 'vaults' || view === 'create' ? 'is-active' : ''}`}
+            className={`sidebar-row sidebar-row-all ${activeView === 'vaults' || activeView === 'create' ? 'is-active' : ''}`}
             onClick={() => setView(dropboxConnected ? 'vaults' : 'connect')}
             title="All vaults"
             type="button"
           >
             <span className="sidebar-row-icon"><Icon name="key" /></span>
-            <span className="sidebar-row-copy"><strong>All vaults</strong><small>{selectedFile ? '1 vault' : 'No vaults'}</small></span>
+            <span className="sidebar-row-copy"><strong>All vaults</strong><small>{totalVaults ? `${totalVaults} ${totalVaults === 1 ? 'vault' : 'vaults'}` : 'No vaults'}</small></span>
           </button>
 
           <div className="sidebar-section">
             <div className="sidebar-section-label"><span>On this device</span><Icon name="file" size={16} /></div>
-            {selectedFile ? (
-              <button className={`sidebar-row vault-row ${view === 'unlock' || view === 'browse' ? 'is-active' : ''}`} onClick={() => setView(vaultSnapshot ? 'browse' : 'unlock')} title={selectedFile} type="button">
+            {selectedFile && selectedStorage === 'device' ? (
+              <button className={`sidebar-row vault-row ${activeView === 'unlock' || activeView === 'browse' ? 'is-active' : ''}`} onClick={() => setView(vaultSnapshot ? 'browse' : 'unlock')} title={selectedFile} type="button">
                 <span className="vault-avatar">{selectedFile.slice(0, 1).toUpperCase()}<span className="vault-lock"><Icon name={vaultSnapshot ? 'check' : 'lock'} size={11} /></span></span>
                 <span className="sidebar-row-copy"><strong>{selectedFile.replace(/\.kdbx$/i, '')}</strong><small>{vaultSnapshot ? 'Open · read only' : 'Locked'}</small></span>
               </button>
@@ -216,7 +239,20 @@ function App() {
 
           <div className="sidebar-section">
             <div className="sidebar-section-label"><span>On Dropbox</span><Icon name="cloud" size={16} /></div>
-            <p className="sidebar-empty">{dropboxConnected ? 'No vaults found' : 'Not connected'}</p>
+            {dropbox.vaults.map((vault) => (
+              <button
+                className={`sidebar-row vault-row ${activeDropboxVaultId === vault.id && (activeView === 'unlock' || activeView === 'browse') ? 'is-active' : ''}`}
+                disabled={Boolean(openingDropboxVaultId)}
+                key={vault.id}
+                onClick={() => void openDropboxVault(vault)}
+                title={vault.pathDisplay}
+                type="button"
+              >
+                <span className="vault-avatar">{vault.name.slice(0, 1).toUpperCase()}<span className="vault-lock"><Icon name={activeDropboxVaultId === vault.id && vaultSnapshot ? 'check' : 'lock'} size={11} /></span></span>
+                <span className="sidebar-row-copy"><strong>{vault.name.replace(/\.kdbx$/i, '')}</strong><small>{openingDropboxVaultId === vault.id ? 'Downloading…' : activeDropboxVaultId === vault.id && vaultSnapshot ? 'Open · read only' : 'Dropbox · locked'}</small></span>
+              </button>
+            ))}
+            {!dropbox.vaults.length && <p className="sidebar-empty">{dropbox.status === 'loading' || dropbox.status === 'connecting' ? 'Connecting…' : dropboxConnected ? 'No vaults found' : 'Not connected'}</p>}
             <button className="sidebar-row sidebar-new-vault" onClick={() => setView(dropboxConnected ? 'create' : 'connect')} title="New vault" type="button">
               <span className="sidebar-row-icon sidebar-row-icon-dashed"><Icon name="plus" /></span>
               <span className="sidebar-row-copy"><strong>New vault</strong><small>Create in Dropbox</small></span>
@@ -224,9 +260,9 @@ function App() {
           </div>
         </nav>
 
-        <button className="sidebar-connection" onClick={() => setView('connect')} title={dropboxConnected ? 'Dropbox ready' : 'Dropbox disconnected'} type="button">
+        <button className="sidebar-connection" onClick={() => dropboxConnected ? setView('vaults') : void dropbox.connect()} title={dropboxConnected ? 'Dropbox ready' : 'Dropbox disconnected'} type="button">
           <span className={`status-dot ${dropboxConnected ? 'is-ready' : ''}`} />
-          <span className="sidebar-row-copy"><strong>Dropbox</strong><small>{dropboxConnected ? 'Ready' : 'Disconnected'}</small></span>
+          <span className="sidebar-row-copy"><strong>Dropbox</strong><small>{dropbox.status === 'connecting' || dropbox.status === 'loading' ? 'Connecting' : dropboxConnected ? 'Ready' : dropbox.status === 'error' ? 'Needs attention' : 'Disconnected'}</small></span>
         </button>
       </aside>
 
@@ -235,12 +271,12 @@ function App() {
           <strong className="workspace-title">{workspaceTitle}</strong>
           <div className={`connection-status ${dropboxConnected ? 'is-connected' : ''}`}>
             <span className="status-dot" />
-            <span>{dropboxConnected ? 'Dropbox ready' : 'Not connected'}</span>
+            <span>{dropbox.status === 'connecting' || dropbox.status === 'loading' ? 'Connecting Dropbox' : dropboxConnected ? 'Dropbox ready' : 'Not connected'}</span>
           </div>
         </header>
 
-        <section className={`content-stage ${view === 'browse' ? 'is-vault-open' : ''}`}>
-          {view === 'connect' && (
+        <section className={`content-stage ${activeView === 'browse' ? 'is-vault-open' : ''}`}>
+          {activeView === 'connect' && (
             <div className="focus-card connect-card">
               <div className="security-emblem"><Icon name="shield" size={32} /></div>
               <div className="card-copy">
@@ -249,14 +285,15 @@ function App() {
                 <p className="lede">Connect Dropbox to create or open encrypted KDBX vaults. Your master passwords stay on this device.</p>
               </div>
               <div className="card-actions">
-                <button className="button button-primary" onClick={() => { setDropboxConnected(true); setView('vaults') }} type="button"><Icon name="cloud" />Connect Dropbox</button>
+                <button className="button button-primary" disabled={dropbox.status === 'connecting'} onClick={() => void dropbox.connect()} type="button"><Icon name="cloud" />{dropbox.status === 'connecting' ? 'Opening Dropbox…' : 'Connect Dropbox'}</button>
                 <button className="button button-secondary" onClick={() => fileInputRef.current?.click()} type="button"><Icon name="file" />Open KDBX from device</button>
               </div>
+              {dropbox.error && <p className="unlock-error" role="alert">{dropbox.error}</p>}
               <p className="privacy-note"><Icon name="lock" size={15} /> Dropbox receives encrypted vault files only.</p>
             </div>
           )}
 
-          {view === 'vaults' && (
+          {activeView === 'vaults' && (
             <div className="vault-chooser">
               <div className="section-heading">
                 <div>
@@ -264,7 +301,7 @@ function App() {
                   <h1>Choose where to begin</h1>
                   <p>Open an encrypted vault or create a new one in your Dropbox folder.</p>
                 </div>
-                <span className="secure-pill"><Icon name="check" size={14} /> Connected</span>
+                <span className="secure-pill"><Icon name="check" size={14} /> {dropbox.session?.accountName || 'Connected'}</span>
               </div>
 
               <div className="choice-grid">
@@ -280,15 +317,29 @@ function App() {
                 </button>
               </div>
 
-              <div className="empty-vaults">
-                <span className="empty-icon"><Icon name="cloud" /></span>
-                <div><strong>No vaults found yet</strong><span>Encrypted KDBX files in Meridium Keys will appear here.</span></div>
-                <button className="icon-button" aria-label="Check Dropbox again" title="Check Dropbox again" type="button"><Icon name="refresh" /></button>
-              </div>
+              {dropbox.error && <p className="unlock-error" role="alert">{dropbox.error}</p>}
+              {dropbox.vaults.length ? (
+                <div className="dropbox-vault-list" aria-label="Dropbox vaults">
+                  {dropbox.vaults.map((vault) => (
+                    <button disabled={Boolean(openingDropboxVaultId)} key={vault.id} onClick={() => void openDropboxVault(vault)} type="button">
+                      <span className="vault-avatar">{vault.name.slice(0, 1).toUpperCase()}</span>
+                      <span><strong>{vault.name.replace(/\.kdbx$/i, '')}</strong><small>{vault.pathDisplay} · {(vault.size / 1024).toFixed(1)} KB</small></span>
+                      <span>{openingDropboxVaultId === vault.id ? 'Downloading…' : 'Open'}</span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="empty-vaults">
+                  <span className="empty-icon"><Icon name="cloud" /></span>
+                  <div><strong>{dropbox.status === 'loading' ? 'Checking Dropbox…' : 'No vaults found yet'}</strong><span>Encrypted KDBX files in Meridium Keys will appear here.</span></div>
+                  <button className="icon-button" aria-label="Check Dropbox again" disabled={dropbox.status === 'loading'} onClick={() => void dropbox.refresh()} title="Check Dropbox again" type="button"><Icon name="refresh" /></button>
+                </div>
+              )}
+              <button className="text-button" onClick={() => { dropbox.disconnect(); setView('connect') }} type="button">Disconnect Dropbox for this session</button>
             </div>
           )}
 
-          {view === 'create' && (
+          {activeView === 'create' && (
             <form className="focus-card create-card" onSubmit={submitCreate}>
               <button className="back-button" onClick={resetCreate} type="button"><Icon name="arrow-left" /> Back to vaults</button>
               <div className="card-copy">
@@ -328,7 +379,7 @@ function App() {
             </form>
           )}
 
-          {view === 'unlock' && (
+          {activeView === 'unlock' && (
             <form className="focus-card unlock-card" onSubmit={submitUnlock}>
               <button className="back-button" onClick={() => setView('vaults')} type="button"><Icon name="arrow-left" /> Back to vaults</button>
               <div className="vault-seal"><span>{selectedFile.slice(0, 1).toUpperCase()}</span><span className="seal-lock"><Icon name="lock" size={14} /></span></div>
@@ -347,7 +398,7 @@ function App() {
             </form>
           )}
 
-          {view === 'browse' && vaultSnapshot && <VaultBrowser onLock={lockVault} vault={vaultSnapshot} />}
+          {activeView === 'browse' && vaultSnapshot && <VaultBrowser onLock={lockVault} vault={vaultSnapshot} />}
         </section>
 
         {import.meta.env.DEV && <div className="dev-note">UX preview · no vault files are changed</div>}
