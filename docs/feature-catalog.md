@@ -15,8 +15,10 @@ future possibilities.
 - Unlock a vault with its master password.
 - Provide a 12-word recovery path for each vault.
 
-**Implemented in the current read-only slice:**
+**Implemented:**
 
+- Create a standard KDBX 4 vault with an independent master password.
+- Upload a new vault to the connected Dropbox App Folder without overwriting an existing file.
 - Select and unlock a local standard KDBX 4 vault.
 - Browse groups, entry names, usernames, and URLs without exposing protected passwords.
 - Mask password presence and explicitly relock the vault.
@@ -106,6 +108,12 @@ vault file format without losing data in third-party applications.
 - Dropbox stores and synchronizes encrypted vault files.
 - The Signal Music integration is the architectural reference for Dropbox work.
 - The app is local-first and should work offline with a previously cached vault.
+
+**Implemented so far:**
+
+- Connect to the scoped Dropbox App Folder using OAuth code flow with PKCE.
+- Discover and download standard KDBX files.
+- Upload newly created KDBX files with no-overwrite conflict handling.
 
 **Proposed:**
 

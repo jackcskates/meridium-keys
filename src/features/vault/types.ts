@@ -33,13 +33,12 @@ export type VaultOpenErrorCode =
   | 'CORRUPT_KDBX'
   | 'WORKER_FAILURE'
 
-export type VaultWorkerRequest = {
-  type: 'unlock'
-  file: File
-  password: string
-}
+export type VaultWorkerRequest =
+  | { type: 'unlock'; file: File; password: string }
+  | { type: 'create'; databaseName: string; fileName: string; password: string }
 
 export type VaultWorkerResponse =
-  | { type: 'progress'; stage: 'reading' | 'decrypting' | 'mapping' }
+  | { type: 'progress'; stage: 'reading' | 'decrypting' | 'mapping' | 'creating' | 'encrypting' }
   | { type: 'success'; vault: VaultSnapshot }
+  | { type: 'created'; data: ArrayBuffer; fileName: string }
   | { type: 'error'; code: VaultOpenErrorCode; message: string }

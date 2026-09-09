@@ -31,10 +31,19 @@ encrypts persisted Dropbox authorization and cached KDBX bytes.
 
 ### Master password
 
-- Entered only into the unlock flow for one vault.
+- Entered only into the create or unlock flow for one vault.
 - Passed to the cryptographic worker without logging or serialization.
 - Removed from form state immediately after use.
 - Never stored for automatic unlock until a separate reviewed design exists.
+
+### New vault encryption
+
+- New files use standard KDBX 4 serialization through `kdbxweb`.
+- The key derivation function is Argon2id with 64 MiB memory, three iterations,
+  and one lane for the initial compatibility slice.
+- Encryption completes locally before encrypted bytes are sent to Dropbox.
+- These parameters require performance validation on the supported phone baseline
+  and may be strengthened through a versioned policy without changing the KDBX format.
 
 ### Decrypted vault model
 
@@ -96,17 +105,20 @@ key-rotation behavior, deletion behavior, and what happens after recovery.
 - Service-worker update during an unlocked session.
 - Content Security Policy and dependency supply-chain review.
 
-## Current read-only verification
+## Current compatibility verification
 
 - Automated KDBX 4 Argon2id and AES-KDF fixtures open successfully.
 - Protected password text is not included in the UI snapshot.
 - Wrong passwords and malformed bytes return safe, non-library error messages.
 - An independently generated PyKeePass KDBX 4 fixture opens in the browser worker.
 - Explicit lock removes the decrypted snapshot and rendered entry metadata.
+- A newly created standard KDBX 4 vault reopens with its chosen password and
+  rejects a wrong password in automated tests.
 - Dependency audit currently reports no known vulnerabilities.
 
-This verifies the current read-only slice only; it is not a complete security
-assessment of editing, persistence, Dropbox synchronization, recovery, or production use.
+This verifies creation and the current read-only slice only; it is not a complete
+security assessment of editing, persistence, synchronization conflicts, recovery,
+or production use.
 
 ## Non-goals for the first implementation
 

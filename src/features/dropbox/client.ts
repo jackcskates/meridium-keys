@@ -110,3 +110,35 @@ export async function downloadDropboxVault(session: DropboxSession, vault: Dropb
 
   return new File([await response.arrayBuffer()], vault.name, { type: 'application/octet-stream' })
 }
+
+export async function uploadNewDropboxVault(session: DropboxSession, file: File) {
+  const response = await fetch(`${contentEndpoint}/files/upload`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${session.accessToken}`,
+      'Content-Type': 'application/octet-stream',
+      'Dropbox-API-Arg': JSON.stringify({
+        path: `/${file.name}`,
+        mode: { '.tag': 'add' },
+        autorename: false,
+        strict_conflict: true,
+        mute: false,
+      }),
+    },
+    body: file,
+  })
+
+  if (!response.ok) {
+    const details = await response.text()
+    if (response.status === 409 && details.toLowerCase().includes('conflict')) {
+      throw new DropboxApiError(`A vault named ${file.name.replace(/\.kdbx$/i, '')} already exists in Dropbox.`)
+    }
+    throw new DropboxApiError(response.status === 401
+      ? 'The Dropbox connection expired. Connect again.'
+      : `${file.name} could not be saved to Dropbox. Your existing files were not changed.`)
+  }
+
+  const vault = mapVault(await response.json() as DropboxEntry)
+  if (!vault) throw new DropboxApiError('Dropbox saved the file but returned incomplete vault information. Refresh the library.')
+  return vault
+}

@@ -5,6 +5,7 @@ import type { DropboxVaultFile } from './features/dropbox/types'
 import { useDropbox } from './features/dropbox/useDropbox'
 import { usePwaLifecycle } from './features/pwa/usePwaLifecycle'
 import { VaultBrowser } from './features/vault/VaultBrowser'
+import { createVaultFile, type CreateVaultStage } from './features/vault/createVault'
 import { VaultOpenError } from './features/vault/kdbx'
 import type { VaultSnapshot } from './features/vault/types'
 import { unlockVaultFile, type UnlockStage } from './features/vault/unlockVault'
@@ -183,6 +184,8 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
   const [confirmation, setConfirmation] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [formTouched, setFormTouched] = useState(false)
+  const [createError, setCreateError] = useState('')
+  const [createStage, setCreateStage] = useState<CreateVaultStage | 'uploading' | null>(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => window.matchMedia('(max-width: 720px)').matches)
   const dropbox = useDropbox()
   const pwa = usePwaLifecycle()
@@ -271,9 +274,36 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
     setView('unlock')
   }
 
-  function submitCreate(event: FormEvent<HTMLFormElement>) {
+  async function submitCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setFormTouched(true)
+    setCreateError('')
+
+    if (!createIsValid) return
+    if (!dropbox.session) {
+      setCreateError('Connect Dropbox before creating this vault.')
+      return
+    }
+
+    const databaseName = vaultName.trim()
+    const masterPassword = password
+    setPassword('')
+    setConfirmation('')
+    setCreateStage('creating')
+
+    try {
+      const file = await createVaultFile(databaseName, masterPassword, setCreateStage)
+      setCreateStage('uploading')
+      const uploadedVault = await dropbox.upload(file)
+      setActiveDropboxVaultId(uploadedVault.id)
+      setVaultName('')
+      setFormTouched(false)
+      openFile(file, 'dropbox')
+    } catch (error) {
+      setCreateError(error instanceof Error ? error.message : 'The vault could not be created safely.')
+    } finally {
+      setCreateStage(null)
+    }
   }
 
   function resetCreate() {
@@ -281,6 +311,8 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
     setPassword('')
     setConfirmation('')
     setFormTouched(false)
+    setCreateError('')
+    setCreateStage(null)
     setView('vaults')
   }
 
@@ -408,7 +440,7 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
               <div className="choice-grid">
                 <button className="choice-card choice-primary" onClick={() => setView('create')} type="button">
                   <span className="choice-icon"><Icon name="plus" size={26} /></span>
-                  <span><strong>Create a new vault</strong><small>Set a name, master password, and recovery option.</small></span>
+                  <span><strong>Create a new vault</strong><small>Set its name and independent master password.</small></span>
                   <Icon name="chevron-right" />
                 </button>
                 <button className="choice-card" onClick={() => fileInputRef.current?.click()} type="button">
@@ -442,41 +474,50 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
 
           {activeView === 'create' && (
             <form className="focus-card create-card" onSubmit={submitCreate}>
-              <button className="back-button" onClick={resetCreate} type="button"><Icon name="arrow-left" /> Back to vaults</button>
+              <button className="back-button" disabled={Boolean(createStage)} onClick={resetCreate} type="button"><Icon name="arrow-left" /> Back to vaults</button>
               <div className="card-copy">
                 <p className="eyebrow">New vault</p>
                 <h1>Create your vault</h1>
-                <p className="lede">This master password protects only this vault. Meridium Keys cannot recover it without your recovery phrase.</p>
+                <p className="lede">This master password protects only this standard KDBX vault. Store it safely; recovery phrases are not enabled yet.</p>
               </div>
 
               <div className="form-stack">
                 <label className="field">
                   <span>Vault name</span>
-                  <input autoComplete="off" onChange={(event) => setVaultName(event.target.value)} placeholder="Personal" value={vaultName} />
+                  <input autoComplete="off" disabled={Boolean(createStage)} onChange={(event) => setVaultName(event.target.value)} placeholder="Personal" required value={vaultName} />
                 </label>
                 <label className="field">
                   <span>Master password</span>
                   <div className="secret-input">
-                    <input autoComplete="new-password" onChange={(event) => setPassword(event.target.value)} placeholder="At least 12 characters" type={showPassword ? 'text' : 'password'} value={password} />
-                    <button aria-label={showPassword ? 'Hide master password' : 'Show master password'} onClick={() => setShowPassword((current) => !current)} type="button"><Icon name={showPassword ? 'eye-off' : 'eye'} /></button>
+                    <input autoComplete="new-password" disabled={Boolean(createStage)} minLength={12} onChange={(event) => setPassword(event.target.value)} placeholder="At least 12 characters" required type={showPassword ? 'text' : 'password'} value={password} />
+                    <button aria-label={showPassword ? 'Hide master password' : 'Show master password'} disabled={Boolean(createStage)} onClick={() => setShowPassword((current) => !current)} type="button"><Icon name={showPassword ? 'eye-off' : 'eye'} /></button>
                   </div>
-                  <small className={formTouched && password.length < 12 ? 'field-error' : ''}>Use 12 or more characters for this prototype.</small>
+                  <small className={formTouched && password.length < 12 ? 'field-error' : ''}>Use 12 or more characters.</small>
                 </label>
                 <label className="field">
                   <span>Confirm master password</span>
-                  <input autoComplete="new-password" onChange={(event) => setConfirmation(event.target.value)} type={showPassword ? 'text' : 'password'} value={confirmation} />
+                  <input autoComplete="new-password" disabled={Boolean(createStage)} minLength={12} onChange={(event) => setConfirmation(event.target.value)} required type={showPassword ? 'text' : 'password'} value={confirmation} />
                   {formTouched && !passwordsMatch && <small className="field-error">The passwords must match.</small>}
                 </label>
               </div>
 
-              <label className="recovery-option">
-                <input defaultChecked type="checkbox" />
-                <span className="checkbox-ui"><Icon name="check" size={14} /></span>
-                <span><strong>Create a 12-word recovery phrase</strong><small>Recommended. Stored separately so the KDBX vault remains compatible with other apps.</small></span>
-              </label>
+              <div className="recovery-option recovery-pending">
+                <span className="recovery-status-icon"><Icon name="shield" size={18} /></span>
+                <span><strong>Recovery phrase coming later</strong><small>This vault remains fully compatible with KeePass apps. Do not lose its master password.</small></span>
+              </div>
 
-              <button className="button button-primary button-wide" type="submit">Create encrypted vault<Icon name="chevron-right" /></button>
-              {formTouched && createIsValid && <p className="prototype-message" role="status">The setup flow is ready. Encryption and file creation are the next implementation step.</p>}
+              {createError && <p className="unlock-error" role="alert">{createError}</p>}
+              <button className="button button-primary button-wide" disabled={Boolean(createStage)} type="submit">
+                {createStage && <Icon name={createStage === 'uploading' ? 'cloud' : 'shield'} />}
+                {createStage === 'creating'
+                  ? 'Preparing vault…'
+                  : createStage === 'encrypting'
+                    ? 'Encrypting vault…'
+                    : createStage === 'uploading'
+                      ? 'Saving to Dropbox…'
+                      : 'Create encrypted vault'}
+                {!createStage && <Icon name="chevron-right" />}
+              </button>
             </form>
           )}
 
@@ -502,7 +543,6 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
           {activeView === 'browse' && vaultSnapshot && <VaultBrowser onLock={lockVault} vault={vaultSnapshot} />}
         </section>
 
-        {import.meta.env.DEV && <div className="dev-note">UX preview · no vault files are changed</div>}
       </main>
 
       <input accept=".kdbx,application/octet-stream" aria-hidden="true" className="visually-hidden" onChange={(event) => { openFile(event.target.files?.[0]); event.currentTarget.value = '' }} ref={fileInputRef} tabIndex={-1} type="file" />

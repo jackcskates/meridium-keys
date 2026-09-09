@@ -33,15 +33,19 @@ export function unlockVaultFile(
     worker.onmessage = (event: MessageEvent<VaultWorkerResponse>) => {
       const message = event.data
       if (message.type === 'progress') {
-        onProgress?.(message.stage)
+        if (message.stage === 'reading' || message.stage === 'decrypting' || message.stage === 'mapping') {
+          onProgress?.(message.stage)
+        }
         return
       }
 
       finish()
       if (message.type === 'success') {
         resolve(message.vault)
-      } else {
+      } else if (message.type === 'error') {
         reject(new VaultOpenError(message.code, message.message))
+      } else {
+        reject(new VaultOpenError('WORKER_FAILURE', 'The secure vault worker returned an unexpected result.'))
       }
     }
 

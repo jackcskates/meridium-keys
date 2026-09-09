@@ -644,6 +644,7 @@ h1 {
 }
 
 .back-button:hover, .text-button:hover { color: var(--text-primary); }
+.back-button:disabled { opacity: 0.55; cursor: wait; }
 .form-stack { display: grid; gap: 16px; }
 
 .field {
@@ -672,6 +673,7 @@ h1 {
 
 .field input::placeholder { color: var(--text-placeholder); }
 .field input:focus { box-shadow: inset 0 0 0 1px var(--border-strong); }
+.field input:disabled { opacity: 0.65; cursor: wait; }
 .field small { color: var(--text-tertiary); font-size: 0.74rem; font-weight: 500; }
 .field small.field-error { color: var(--danger); }
 .secret-input { position: relative; }
@@ -723,6 +725,16 @@ h1 {
 .recovery-option input:checked + .checkbox-ui { color: var(--contrast-white); background: var(--accent-strong); border-color: var(--accent-strong); }
 .recovery-option input:focus-visible + .checkbox-ui { box-shadow: 0 0 0 3px var(--accent-focus); }
 .recovery-option > span:last-child { display: flex; flex-direction: column; gap: 4px; }
+
+.recovery-pending { cursor: default; }
+
+.recovery-status-icon {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  color: var(--text-secondary);
+}
 
 .prototype-message {
   margin: -10px 0 0;

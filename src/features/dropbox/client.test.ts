@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { downloadDropboxVault, listDropboxVaults, loadDropboxAccount } from './client'
+import { downloadDropboxVault, listDropboxVaults, loadDropboxAccount, uploadNewDropboxVault } from './client'
 import type { DropboxSession, DropboxVaultFile } from './types'
 
 const session: DropboxSession = {
@@ -68,5 +68,35 @@ describe('Dropbox client', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('', { status: 401 })))
 
     await expect(listDropboxVaults(session)).rejects.toThrow('The Dropbox connection expired. Connect again.')
+  })
+
+  it('uploads a new vault without allowing overwrite or autorename', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      '.tag': 'file',
+      id: 'id:new',
+      name: 'Personal.kdbx',
+      path_display: '/Personal.kdbx',
+      rev: 'new-rev',
+      size: 1234,
+      server_modified: '2026-09-09T00:00:00Z',
+    }), { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const file = new File([new Uint8Array([1, 2, 3])], 'Personal.kdbx')
+    const result = await uploadNewDropboxVault(session, file)
+    const options = fetchMock.mock.calls[0][1] as RequestInit
+    const headers = options.headers as Record<string, string>
+    const argument = JSON.parse(headers['Dropbox-API-Arg'])
+
+    expect(result.id).toBe('id:new')
+    expect(argument).toMatchObject({ path: '/Personal.kdbx', mode: { '.tag': 'add' }, autorename: false, strict_conflict: true })
+    expect(options.body).toBe(file)
+  })
+
+  it('reports a Dropbox name conflict without creating a copy', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('path/conflict/file', { status: 409 })))
+    const file = new File([new Uint8Array([1])], 'Personal.kdbx')
+
+    await expect(uploadNewDropboxVault(session, file)).rejects.toThrow('already exists')
   })
 })

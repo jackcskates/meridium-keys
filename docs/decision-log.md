@@ -89,6 +89,18 @@ they never existed; mark them superseded and link to the replacement.
   guessing. Replace it with the reviewed encrypted App Lock envelope; use
   server-side access control separately if the deployment itself must be private.
 
+### D-019 - Initial vault creation
+
+- **Status:** Accepted
+- **Decision:** Create standard KDBX 4 vaults locally with Argon2id, then upload
+  only the encrypted bytes to the connected Dropbox App Folder. New-file upload
+  must fail visibly when the requested filename already exists; it must not
+  overwrite or silently rename another vault.
+- **Reason:** This preserves third-party KeePass compatibility and user ownership
+  while making the primary Dropbox-first creation flow functional.
+- **Limitation:** Twelve-word recovery and revision-safe updates to existing
+  vaults remain separate, unimplemented security slices.
+
 ## Open
 
 ### D-005 - Standard KDBX compatibility

@@ -12,7 +12,7 @@ Music credentials, Swift-specific code, or media-library behavior.
 
 ## Authentication
 
-**Implemented for the current read-only connection:**
+**Implemented:**
 
 - The scoped Dropbox application uses App Folder access. Its physical account
   folder is `/Apps/Meridium Keys`; API paths are relative to that root.
@@ -23,9 +23,12 @@ Music credentials, Swift-specific code, or media-library behavior.
   PWA requires connecting again.
 - The client recursively lists metadata, filters standard `.kdbx` files, and
   downloads a selected encrypted file directly into the local unlock worker.
+- Newly created standard KDBX files upload directly to the App Folder. Creation
+  uses Dropbox add mode, disables automatic renaming, and treats an existing
+  filename as a visible conflict rather than overwriting it.
 - Current scopes are `account_info.read`, `files.metadata.read`,
-  `files.content.read`, and `files.content.write`. Write remains unused until the
-  revision-safe save slice is implemented.
+  `files.content.read`, and `files.content.write`. Write is currently used only
+  for new-file creation; updates remain blocked until revision-safe save exists.
 
 **Next:** request offline access only after the per-device App Lock can encrypt a
 refresh token at rest. A plaintext refresh token must never be persisted.

@@ -1,7 +1,7 @@
 /// <reference lib="webworker" />
 
 import { DOMParser as XmlDomParser, XMLSerializer as XmlSerializer } from '@xmldom/xmldom'
-import { readKdbxSnapshot, VaultOpenError } from './kdbx'
+import { createKdbxData, readKdbxSnapshot, VaultOpenError } from './kdbx'
 import type { VaultWorkerRequest, VaultWorkerResponse } from './types'
 
 const scope = self as DedicatedWorkerGlobalScope
@@ -20,9 +20,15 @@ function respond(message: VaultWorkerResponse) {
 }
 
 scope.onmessage = async (event: MessageEvent<VaultWorkerRequest>) => {
-  if (event.data.type !== 'unlock') return
-
   try {
+    if (event.data.type === 'create') {
+      respond({ type: 'progress', stage: 'creating' })
+      respond({ type: 'progress', stage: 'encrypting' })
+      const data = await createKdbxData(event.data.databaseName, event.data.password)
+      scope.postMessage({ type: 'created', data, fileName: event.data.fileName } satisfies VaultWorkerResponse, [data])
+      return
+    }
+
     respond({ type: 'progress', stage: 'reading' })
     const data = await event.data.file.arrayBuffer()
     respond({ type: 'progress', stage: 'decrypting' })
@@ -32,7 +38,7 @@ scope.onmessage = async (event: MessageEvent<VaultWorkerRequest>) => {
   } catch (error) {
     const safeError = error instanceof VaultOpenError
       ? error
-      : new VaultOpenError('WORKER_FAILURE', 'The vault could not be opened. No vault data was retained.')
+      : new VaultOpenError('WORKER_FAILURE', 'The vault operation could not be completed safely. No vault data was retained.')
     respond({ type: 'error', code: safeError.code, message: safeError.message })
   }
 }

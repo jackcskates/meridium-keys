@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { downloadDropboxVault, listDropboxVaults, loadDropboxAccount } from './client'
+import { downloadDropboxVault, listDropboxVaults, loadDropboxAccount, uploadNewDropboxVault } from './client'
 import { beginDropboxAuthorization, completeDropboxAuthorization, DropboxAuthError } from './oauth'
 import type { DropboxConnectionStatus, DropboxSession, DropboxVaultFile } from './types'
 
@@ -71,6 +71,13 @@ export function useDropbox() {
     return downloadDropboxVault(session, vault)
   }
 
+  async function upload(file: File) {
+    if (!session) throw new Error('Connect Dropbox before creating a vault.')
+    const vault = await uploadNewDropboxVault(session, file)
+    await loadLibrary(session)
+    return vault
+  }
+
   function disconnect() {
     setSession(null)
     setVaults([])
@@ -87,6 +94,7 @@ export function useDropbox() {
     connect,
     disconnect,
     download,
+    upload,
     refresh,
   }
 }

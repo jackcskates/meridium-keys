@@ -3,9 +3,11 @@ import {
   Consts,
   Credentials,
   CryptoEngine,
+  Int64,
   Kdbx,
   KdbxError,
   ProtectedValue,
+  VarDictionary,
   type KdbxEntry,
   type KdbxGroup,
 } from 'kdbxweb'
@@ -66,6 +68,23 @@ export function configureArgon2() {
   })
 
   argon2Configured = true
+}
+
+export async function createKdbxData(databaseName: string, password: string) {
+  if (!password) throw new VaultOpenError('EMPTY_PASSWORD', 'Enter a master password for this vault.')
+
+  configureArgon2()
+  const credentials = new Credentials(ProtectedValue.fromString(password))
+  const database = Kdbx.create(credentials, databaseName)
+  database.setKdf(Consts.KdfId.Argon2id)
+
+  const parameters = database.header.kdfParameters
+  if (!parameters) throw new VaultOpenError('WORKER_FAILURE', 'The secure vault settings could not be created.')
+  parameters.set('M', VarDictionary.ValueType.UInt64, Int64.from(64 * 1024 * 1024))
+  parameters.set('I', VarDictionary.ValueType.UInt64, Int64.from(3))
+  parameters.set('P', VarDictionary.ValueType.UInt32, 1)
+
+  return database.save()
 }
 
 function plainField(entry: KdbxEntry, name: string) {

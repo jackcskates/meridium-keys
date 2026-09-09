@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DOMParser as XmlDomParser, XMLSerializer as XmlSerializer } from '@xmldom/xmldom'
 import { Consts, Credentials, Kdbx, ProtectedValue } from 'kdbxweb'
-import { configureArgon2, readKdbxSnapshot, VaultOpenError } from './kdbx'
+import { configureArgon2, createKdbxData, readKdbxSnapshot, VaultOpenError } from './kdbx'
 
 // kdbxweb uses browser-native XML APIs in production. Supply the current,
 // patched xmldom implementation only when these compatibility tests run in Node.
@@ -27,6 +27,16 @@ async function createFixture(kdf: string) {
 }
 
 describe('readKdbxSnapshot', () => {
+  it('creates a standard empty KDBX 4 vault protected by Argon2id', async () => {
+    const data = await createKdbxData('Created Fixture', fixturePassword)
+    const result = await readKdbxSnapshot(data, fixturePassword, 'Created Fixture.kdbx')
+
+    expect(result.databaseName).toBe('Created Fixture')
+    expect(result.version).toMatch(/^4\./)
+    expect(result.groups.some((group) => group.name === 'Created Fixture')).toBe(true)
+    await expect(readKdbxSnapshot(data, 'wrong password')).rejects.toMatchObject({ code: 'INVALID_CREDENTIALS' })
+  })
+
   it.each([
     ['KDBX 4 Argon2id', Consts.KdfId.Argon2id],
     ['KDBX 4 AES-KDF', Consts.KdfId.Aes],
