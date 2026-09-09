@@ -43,6 +43,14 @@ export function useDropbox() {
       })
   }, [loadLibrary])
 
+  useEffect(() => {
+    const reconnect = () => {
+      if (session) void loadLibrary(session)
+    }
+    window.addEventListener('online', reconnect)
+    return () => window.removeEventListener('online', reconnect)
+  }, [loadLibrary, session])
+
   async function connect() {
     setStatus('connecting')
     setError('')

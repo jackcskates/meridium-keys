@@ -2,6 +2,7 @@ import { useRef, useState, type FormEvent } from 'react'
 import { useRegisterSW } from 'virtual:pwa-register/react'
 import type { DropboxVaultFile } from './features/dropbox/types'
 import { useDropbox } from './features/dropbox/useDropbox'
+import { usePwaLifecycle } from './features/pwa/usePwaLifecycle'
 import { VaultBrowser } from './features/vault/VaultBrowser'
 import { VaultOpenError } from './features/vault/kdbx'
 import type { VaultSnapshot } from './features/vault/types'
@@ -72,6 +73,46 @@ function UpdatePrompt() {
   )
 }
 
+function InstallPrompt({ canPromptInstall, isIos, isStandalone, install }: {
+  canPromptInstall: boolean
+  isIos: boolean
+  isStandalone: boolean
+  install: () => Promise<'accepted' | 'dismissed' | 'unavailable'>
+}) {
+  const [dismissed, setDismissed] = useState(() => sessionStorage.getItem('meridium-keys-install-dismissed') === 'true')
+  const [showInstructions, setShowInstructions] = useState(false)
+
+  if (isStandalone || dismissed || (!canPromptInstall && !isIos)) return null
+
+  function dismiss() {
+    sessionStorage.setItem('meridium-keys-install-dismissed', 'true')
+    setDismissed(true)
+  }
+
+  async function beginInstall() {
+    if (canPromptInstall) {
+      const outcome = await install()
+      if (outcome !== 'unavailable') dismiss()
+      return
+    }
+    setShowInstructions(true)
+  }
+
+  return (
+    <aside className="install-toast" aria-label="Install Meridium Keys">
+      <BrandMark className="install-mark" />
+      <div>
+        <strong>{showInstructions ? 'Install from the Share menu' : 'Install Meridium Keys'}</strong>
+        <span>{showInstructions ? 'Tap Share, then Add to Home Screen.' : 'Open your vaults in a dedicated app window.'}</span>
+      </div>
+      {showInstructions
+        ? <button className="text-button" onClick={dismiss} type="button">Done</button>
+        : <button className="button button-small" onClick={() => void beginInstall()} type="button">Install</button>}
+      <button className="toast-dismiss" aria-label="Dismiss install message" onClick={dismiss} type="button">×</button>
+    </aside>
+  )
+}
+
 function BrandMark({ className = '' }: { className?: string }) {
   return (
     <svg aria-hidden="true" className={`brand-mark ${className}`} viewBox="0 0 422 422">
@@ -96,6 +137,7 @@ function App() {
   const [formTouched, setFormTouched] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => window.matchMedia('(max-width: 720px)').matches)
   const dropbox = useDropbox()
+  const pwa = usePwaLifecycle()
   const [selectedVaultFile, setSelectedVaultFile] = useState<File | null>(null)
   const [selectedStorage, setSelectedStorage] = useState<'device' | 'dropbox' | null>(null)
   const [activeDropboxVaultId, setActiveDropboxVaultId] = useState('')
@@ -260,18 +302,18 @@ function App() {
           </div>
         </nav>
 
-        <button className="sidebar-connection" onClick={() => dropboxConnected ? setView('vaults') : void dropbox.connect()} title={dropboxConnected ? 'Dropbox ready' : 'Dropbox disconnected'} type="button">
-          <span className={`status-dot ${dropboxConnected ? 'is-ready' : ''}`} />
-          <span className="sidebar-row-copy"><strong>Dropbox</strong><small>{dropbox.status === 'connecting' || dropbox.status === 'loading' ? 'Connecting' : dropboxConnected ? 'Ready' : dropbox.status === 'error' ? 'Needs attention' : 'Disconnected'}</small></span>
+        <button className="sidebar-connection" disabled={!pwa.isOnline} onClick={() => dropboxConnected ? setView('vaults') : void dropbox.connect()} title={!pwa.isOnline ? 'Device is offline' : dropboxConnected ? 'Dropbox ready' : 'Dropbox disconnected'} type="button">
+          <span className={`status-dot ${pwa.isOnline && dropboxConnected ? 'is-ready' : ''}`} />
+          <span className="sidebar-row-copy"><strong>Dropbox</strong><small>{!pwa.isOnline ? 'Offline' : dropbox.status === 'connecting' || dropbox.status === 'loading' ? 'Connecting' : dropboxConnected ? 'Ready' : dropbox.status === 'error' ? 'Needs attention' : 'Disconnected'}</small></span>
         </button>
       </aside>
 
       <main className="workspace">
         <header className="topbar">
           <strong className="workspace-title">{workspaceTitle}</strong>
-          <div className={`connection-status ${dropboxConnected ? 'is-connected' : ''}`}>
+          <div className={`connection-status ${pwa.isOnline && dropboxConnected ? 'is-connected' : ''} ${!pwa.isOnline ? 'is-offline' : ''}`}>
             <span className="status-dot" />
-            <span>{dropbox.status === 'connecting' || dropbox.status === 'loading' ? 'Connecting Dropbox' : dropboxConnected ? 'Dropbox ready' : 'Not connected'}</span>
+            <span>{!pwa.isOnline ? 'Offline' : dropbox.status === 'connecting' || dropbox.status === 'loading' ? 'Connecting Dropbox' : dropboxConnected ? 'Dropbox ready' : 'Not connected'}</span>
           </div>
         </header>
 
@@ -285,7 +327,7 @@ function App() {
                 <p className="lede">Connect Dropbox to create or open encrypted KDBX vaults. Your master passwords stay on this device.</p>
               </div>
               <div className="card-actions">
-                <button className="button button-primary" disabled={dropbox.status === 'connecting'} onClick={() => void dropbox.connect()} type="button"><Icon name="cloud" />{dropbox.status === 'connecting' ? 'Opening Dropbox…' : 'Connect Dropbox'}</button>
+                <button className="button button-primary" disabled={!pwa.isOnline || dropbox.status === 'connecting'} onClick={() => void dropbox.connect()} type="button"><Icon name="cloud" />{!pwa.isOnline ? 'Dropbox requires a connection' : dropbox.status === 'connecting' ? 'Opening Dropbox…' : 'Connect Dropbox'}</button>
                 <button className="button button-secondary" onClick={() => fileInputRef.current?.click()} type="button"><Icon name="file" />Open KDBX from device</button>
               </div>
               {dropbox.error && <p className="unlock-error" role="alert">{dropbox.error}</p>}
@@ -405,6 +447,7 @@ function App() {
       </main>
 
       <input accept=".kdbx,application/octet-stream" aria-hidden="true" className="visually-hidden" onChange={(event) => { openFile(event.target.files?.[0]); event.currentTarget.value = '' }} ref={fileInputRef} tabIndex={-1} type="file" />
+      <InstallPrompt canPromptInstall={pwa.canPromptInstall} install={pwa.install} isIos={pwa.isIos} isStandalone={pwa.isStandalone} />
       <UpdatePrompt />
     </div>
   )

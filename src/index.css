@@ -70,6 +70,7 @@ html {
   min-width: 320px;
   min-height: 100%;
   background: var(--surface-page);
+  color-scheme: dark;
 }
 
 body {
@@ -95,5 +96,12 @@ button, label { -webkit-tap-highlight-color: transparent; }
 #root { display: contents; }
 
 @media (max-width: 720px) {
-  body { display: block; }
+  body {
+    display: block;
+    padding:
+      env(safe-area-inset-top, 0)
+      env(safe-area-inset-right, 0)
+      env(safe-area-inset-bottom, 0)
+      env(safe-area-inset-left, 0);
+  }
 }

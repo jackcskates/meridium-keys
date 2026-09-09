@@ -57,6 +57,16 @@ they never existed; mark them superseded and link to the replacement.
 - **Replacement condition:** Once App Lock is implemented and reviewed, replace
   session-only authorization with an encrypted refresh-token envelope.
 
+### D-016 - PWA cache boundary
+
+- **Status:** Accepted
+- **Decision:** Install Meridium Keys as a standard standalone PWA while caching
+  only its versioned application-shell assets. Do not runtime-cache Dropbox API
+  responses, tokens, KDBX files, or decrypted vault data in the service worker.
+- **Reason:** The interface can start offline without creating an unprotected
+  second copy of security-sensitive data. Encrypted offline vault retention must
+  wait for the per-device App Lock envelope.
+
 ## Open
 
 ### D-005 - Standard KDBX compatibility

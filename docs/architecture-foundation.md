@@ -118,5 +118,6 @@ explicit about vault and sync state.
 2. KDBX compatibility spike with golden test fixtures. **Read-only slice complete.**
 3. Dropbox PKCE connection and encrypted-file listing.
 4. Unlock, search, reveal, copy, edit, save, and lock flow.
-5. Offline encrypted cache, conflict recovery, and installability.
+5. Offline encrypted vault cache and conflict recovery. **The installable,
+   app-shell-only PWA foundation is complete.**
 6. Security review, cross-app compatibility tests, and accessibility testing.

@@ -949,7 +949,8 @@ h1 {
   letter-spacing: 0.02em;
 }
 
-.update-toast {
+.update-toast,
+.install-toast {
   position: fixed;
   right: 24px;
   bottom: 24px;
@@ -970,6 +971,38 @@ h1 {
 .update-toast > div { display: flex; flex-direction: column; gap: 2px; }
 .update-toast span { color: var(--text-secondary); font-size: 0.75rem; }
 
+.install-toast {
+  padding: 14px 42px 14px 14px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.install-toast .install-mark { width: 30px; height: 30px; }
+.install-toast > div { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.install-toast strong { font-size: 0.84rem; }
+.install-toast span { color: var(--text-secondary); font-size: 0.75rem; line-height: 1.4; }
+.install-toast .text-button { color: var(--text-primary); }
+.toast-dismiss {
+  position: absolute;
+  top: 5px;
+  right: 7px;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  color: var(--text-tertiary);
+  background: transparent;
+  border: 0;
+  border-radius: 9px;
+  font-size: 1.2rem;
+  cursor: pointer;
+}
+
+.toast-dismiss:hover, .toast-dismiss:focus-visible { color: var(--text-primary); background: var(--surface-hover); }
+.sidebar-connection:disabled { opacity: 0.62; cursor: default; }
+.connection-status.is-offline { color: var(--text-tertiary); }
+
 .visually-hidden {
   position: absolute !important;
   width: 1px !important;
@@ -983,7 +1016,7 @@ h1 {
 }
 
 @media (max-width: 720px) {
-  .app-frame { position: relative; width: 100vw; height: 100dvh; min-height: 0; border: 0; border-radius: 0; }
+  .app-frame { position: relative; width: 100%; height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)); min-height: 0; border: 0; border-radius: 0; }
   .workspace { min-height: 0; }
   .vault-sidebar,
   .vault-sidebar.is-collapsed { width: 64px; flex-basis: 64px; }
@@ -1013,7 +1046,12 @@ h1 {
   .choice-icon { width: 44px; height: 44px; }
   .empty-vaults { grid-template-columns: auto 1fr; }
   .empty-vaults .icon-button, .dev-note { display: none; }
-  .update-toast { right: 16px; bottom: 16px; }
+  .update-toast, .install-toast {
+    right: max(16px, env(safe-area-inset-right, 0px));
+    bottom: max(16px, env(safe-area-inset-bottom, 0px));
+    left: max(16px, env(safe-area-inset-left, 0px));
+    width: auto;
+  }
   .vault-browser { min-height: 100%; }
   .vault-browser-header { align-items: center; }
   .vault-browser-header .button { min-height: 40px; padding-inline: 13px; }

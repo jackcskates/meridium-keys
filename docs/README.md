@@ -16,6 +16,8 @@ are deliberately separated so assumptions do not quietly become product rules.
   lifecycle, recovery constraints, and threat-model questions.
 - [Dropbox synchronization](dropbox-sync.md) - reusable Signal Music patterns
   and the proposed encrypted-file sync flow.
+- [PWA installation and device behavior](pwa-installation.md) - install paths,
+  offline boundaries, lifecycle behavior, and production verification.
 - [UX and UI principles](ux-ui-principles.md) - product-specific application of
   the supplied Meridium design material.
 - [Decision log](decision-log.md) - decisions, open questions, and their status.
