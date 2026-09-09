@@ -1,0 +1,99 @@
+@import '@fontsource-variable/inter';
+@import '@fontsource-variable/plus-jakarta-sans';
+
+:root {
+  /* Meridium Foundation 100s: exact neutral ramp and shared geometry. */
+  --neutral-000: #0f0f0f;
+  --neutral-100: #252525;
+  --neutral-200: #3a3a3a;
+  --neutral-300: #515151;
+  --neutral-400: #6c6c6c;
+  --neutral-500: #878787;
+  --neutral-600: #a3a3a3;
+  --neutral-700: #bcbcbc;
+  --neutral-800: #d2d2d2;
+  --neutral-900: #e2e2e2;
+  --neutral-1000: #f0f0f0;
+  --contrast-black: #000;
+  --contrast-white: #fff;
+
+  /* Canonical Meridium symbol color. Never substitute an invented app accent. */
+  --brand-meridium: #e8614d;
+  --brand-meridium-hover: #ef765f;
+  --brand-meridium-soft: rgba(232, 97, 77, 0.1);
+  --brand-meridium-border: rgba(232, 97, 77, 0.32);
+
+  --surface-page: var(--neutral-000);
+  --surface-rail: var(--contrast-black);
+  --surface-0: var(--neutral-000);
+  --surface-1: var(--neutral-100);
+  --surface-2: var(--neutral-200);
+  --surface-3: var(--contrast-black);
+  --surface-hover: var(--neutral-200);
+  --surface-inset: var(--neutral-200);
+  --text-primary: var(--neutral-1000);
+  --text-secondary: var(--neutral-700);
+  --text-tertiary: var(--neutral-600);
+  --text-placeholder: var(--neutral-700);
+  --border-subtle: var(--neutral-200);
+  --border-default: var(--neutral-300);
+  --border-strong: var(--neutral-500);
+  --accent-strong: var(--brand-meridium);
+  --accent-hover: var(--brand-meridium-hover);
+  --accent-soft: var(--brand-meridium-soft);
+  --accent-border: var(--brand-meridium-border);
+  --accent-focus: rgba(240, 240, 240, 0.14);
+  --success: #2f8f63;
+  --warning: #9a874f;
+  --danger: #e39a9a;
+  --radius-window: 1rem;
+  --radius-card: 1rem;
+  --radius-control: 0.75rem;
+  --control-touch-target: 2.75rem;
+  --control-prominent-height: 3.25rem;
+  --shadow-window: 0 28px 80px rgba(0, 0, 0, 0.46);
+  --shadow-card: none;
+  --font-content: 'Plus Jakarta Sans Variable', 'Plus Jakarta Sans', sans-serif;
+  --font-system: 'Inter Variable', Inter, sans-serif;
+  font-family: var(--font-content);
+  color: var(--text-primary);
+  background: var(--surface-page);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* { box-sizing: border-box; }
+
+html {
+  min-width: 320px;
+  min-height: 100%;
+  background: var(--surface-page);
+}
+
+body {
+  min-width: 320px;
+  min-height: 100dvh;
+  margin: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: var(--surface-page);
+}
+
+button { font-family: var(--font-system); }
+input { font: inherit; }
+
+button:focus-visible,
+input:focus-visible {
+  outline: 1px solid var(--neutral-900);
+  outline-offset: 3px;
+}
+
+button, label { -webkit-tap-highlight-color: transparent; }
+#root { display: contents; }
+
+@media (max-width: 720px) {
+  body { display: block; }
+}

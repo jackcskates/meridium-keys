@@ -1,0 +1,126 @@
+# Decision Log
+
+Update this file when a decision changes. Do not rewrite prior decisions as if
+they never existed; mark them superseded and link to the replacement.
+
+## Accepted
+
+### D-000 - Local and platform-independent development
+
+- **Status:** Accepted
+- **Decision:** Develop and preview Meridium Keys locally with the standard Vite
+  development server. Do not use OpenAI Sites or add OpenAI hosting,
+  configuration, packages, runtime dependencies, or platform integrations.
+- **Reason:** The application must remain portable and independent of any
+  proprietary application platform. A hosting provider may be considered only
+  when the user explicitly requests one.
+
+### D-001 - Client foundation
+
+- **Status:** Accepted
+- **Decision:** Use Vite, React, and TypeScript for the PWA foundation.
+- **Reason:** The product is interaction-heavy, local-first, and browser-based;
+  this stack provides a small client foundation with strong TypeScript and PWA
+  tooling support.
+
+### D-002 - Local-first trust boundary
+
+- **Status:** Accepted
+- **Decision:** Decrypt and encrypt vaults on the user's device. Persist and sync
+  only encrypted vault bytes plus non-sensitive metadata.
+- **Reason:** Dropbox and browser persistence must not require access to readable
+  credentials.
+
+### D-003 - Dropbox reference implementation
+
+- **Status:** Accepted
+- **Decision:** Reuse the architectural patterns learned from Signal Music while
+  creating a browser-specific implementation for Meridium Keys.
+- **Reason:** Signal Music already validates useful App Folder, local-first,
+  revision, retry, and error-state patterns.
+
+### D-004 - Design reference
+
+- **Status:** Accepted
+- **Decision:** Apply the supplied Meridium design material to UX architecture,
+  tokens, components, copy, accessibility, and validation.
+- **Reason:** It establishes clarity, hierarchy, consistency, and user-centered
+  design as project standards.
+
+## Open
+
+### D-005 - Standard KDBX compatibility
+
+- **Status:** Accepted
+- **Decision:** Every vault remains a standard `.kdbx` file that can be opened
+  in compatible third-party KeePass applications.
+- **Reason:** Preserve user ownership, portability, and interoperability.
+- **Impact:** Determines the storage model, schema mapping, Argon2 integration,
+  test fixtures, merge behavior, and recovery architecture.
+
+### D-006 - Twelve-word recovery design
+
+- **Status:** Open
+- **Question:** What does the recovery phrase unlock, where is the recovery
+  record stored, and what happens after recovery?
+- **Recommendation:** Keep recovery separate from the standard KDBX file and use
+  a per-vault encrypted recovery record.
+- **Constraint:** Recovery must not change the standard KDBX file or prevent it
+  from opening with its master password in another application.
+
+### D-013 - No Meridium account login
+
+- **Status:** Accepted
+- **Decision:** Meridium Keys has no application account or login. The entry
+  flow connects Dropbox, creates a vault, or opens an existing KDBX vault.
+- **Reason:** Vault credentials provide the security boundary; an additional app
+  account would add friction without protecting locally decrypted content.
+
+### D-014 - Responsive application shape
+
+- **Status:** Accepted
+- **Decision:** On desktop, the PWA is optimized for a compact application
+  window. On phones, the installed PWA fills the available screen and adapts its
+  navigation and layout for touch.
+
+### D-007 - Version-one device and browser baseline
+
+- **Status:** Open
+- **Question:** Which desktop and mobile operating systems and browsers must be
+  supported in the first release?
+- **Impact:** PWA installation, secure storage behavior, clipboard clearing,
+  WebAssembly performance, and testing scope.
+
+### D-008 - Lock and clipboard policy
+
+- **Status:** Open
+- **Question:** When should an unlocked vault lock automatically, and how long
+  should a copied secret remain on the clipboard?
+
+### D-009 - Initial type schema
+
+- **Status:** Open
+- **Question:** Which exact fields are required for Login, Password, and API Key?
+- **Impact:** UX forms, KDBX mapping, search, imports, and compatibility.
+
+### D-010 - Dropbox token persistence
+
+- **Status:** Open
+- **Question:** Should the browser retain Dropbox authorization across sessions,
+  and under what protection and revocation rules?
+- **Impact:** Convenience, background synchronization, and the attack surface of
+  a compromised browser profile.
+
+## Later
+
+### D-011 - Shared vaults
+
+- **Status:** Later / validate
+- **Question:** Should future vault sharing support view and edit roles?
+- **Note:** Not part of the initial implementation until reconfirmed.
+
+### D-012 - Migration target
+
+- **Status:** Later / validate
+- **Question:** Must version one import and fully replace the owner's 1Password 7
+  workflow?
