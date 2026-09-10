@@ -83,9 +83,14 @@ for careful credential work, with lock and sync status always explicit.
   edge beside Show/Hide. Generation replaces only the unsaved password draft;
   the user still explicitly saves or cancels the entry.
 - Selected-entry details show each populated protected field as a masked row
-  with a compact, labeled Copy control at its right edge. Copy is available
-  without entering Edit, uses a 44-pixel touch target on coarse-pointer devices,
-  and confirms success without ever rendering the plaintext value.
+  with a compact Copy icon at its right edge. Copy is available without entering
+  Edit, uses a 44-pixel touch target on coarse-pointer devices, carries an
+  explicit accessible name, and confirms success without rendering plaintext.
+- Conventional workspace utilities use icon-only controls when their symbols
+  are familiar and the action is reversible or separately confirmed. Visible
+  labels remain on Save, Unlock, Connect, unfamiliar destinations, and every
+  destructive confirmation. Icon-only actions retain 44-pixel targets,
+  accessible names, focus states, disabled states, and loading feedback.
 - Storage section labels are text-only. The sidebar footer owns connection
   status, Sign out, and the avatar/profile placeholder; connected and ready
   states use the semantic green status dot with a text label.

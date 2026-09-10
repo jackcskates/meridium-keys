@@ -697,7 +697,7 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
 
           {activeView === 'create' && (
             <form className="focus-card create-card" onSubmit={submitCreate}>
-              <button className="back-button" disabled={Boolean(createStage)} onClick={resetCreate} type="button"><Icon name="arrow-left" /> Back to vaults</button>
+              <button aria-label="Back to vaults" className="back-button back-button-icon" disabled={Boolean(createStage)} onClick={resetCreate} title="Back to vaults" type="button"><Icon name="arrow-left" /></button>
               <div className="card-copy">
                 <p className="eyebrow">New vault</p>
                 <h1>Create your vault</h1>
@@ -786,7 +786,7 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
 
           {activeView === 'unlock' && (
             <form className="focus-card unlock-card" onSubmit={submitUnlock}>
-              <button className="back-button" onClick={() => setView('vaults')} type="button"><Icon name="arrow-left" /> Back to vaults</button>
+              <button aria-label="Back to vaults" className="back-button back-button-icon" onClick={() => setView('vaults')} title="Back to vaults" type="button"><Icon name="arrow-left" /></button>
               <div className="vault-seal"><span>{selectedFile.slice(0, 1).toUpperCase()}</span><span className="seal-lock"><Icon name="lock" size={14} /></span></div>
               <div className="card-copy">
                 <p className="eyebrow">Locked vault</p>

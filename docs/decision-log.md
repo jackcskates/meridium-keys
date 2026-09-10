@@ -255,13 +255,28 @@ they never existed; mark them superseded and link to the replacement.
 ### D-033 - Direct protected-field copy
 
 - **Status:** Accepted
-- **Decision:** Show a labeled Copy action beside every populated protected
+- **Decision:** Show a dedicated Copy action beside every populated protected
   field in the selected-entry detail view. Keep values masked and ask the vault
   worker to decrypt only the requested field when its Copy action is pressed.
   Do not load the full entry or store copied plaintext in React state.
 - **Reason:** Copying a credential is the primary read interaction and should
   not require entering an edit flow. One-field worker reads keep that convenience
   inside the existing least-exposure boundary.
+
+### D-034 - Icon-only workspace utilities
+
+- **Status:** Accepted
+- **Decision:** Use icon-only controls for conventional workspace utilities:
+  Back, Lock vault, Add entry, Create folder, Copy, Edit, Move, and Delete. Use
+  the shared Meridium and Lucide symbol vocabulary. Every control retains an
+  explicit accessible name, focus treatment,
+  disabled/loading feedback, and a minimum 44-pixel touch target. Keep visible
+  text on form commitments, authentication actions, unfamiliar destinations,
+  and destructive confirmation buttons.
+- **Reason:** The working surface should remain quiet and scannable without
+  sacrificing clarity where the consequence of an action matters most. This
+  follows Actions specimen 405 while preserving the hierarchy and tap guidance
+  of the broader design reference.
 
 ## Open
 

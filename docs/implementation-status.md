@@ -41,6 +41,10 @@ Last verified: 2026-09-10.
 - Direct Copy controls beside every populated protected field in the selected
   entry. A click asks the worker for only that field and writes it to the system
   clipboard without opening Edit or storing the plaintext in React state.
+- Conventional workspace utilities now use 44-pixel icon-only controls from the
+  shared symbol vocabulary, with explicit accessible names: Back, Lock, Add,
+  Create folder, Copy, Edit, Move, and Delete. Form submission and destructive
+  confirmation actions keep visible labels.
 - Explicit lock that removes the decrypted snapshot from application state.
 - Safe wrong-password, invalid-file, unsupported-format, corrupt-file, timeout, and worker errors.
 - Dropbox App Folder authorization using OAuth authorization code with PKCE and

@@ -570,6 +570,29 @@ h1 {
 .button-wide { width: 100%; }
 .button-small { min-height: 36px; padding: 0 13px; }
 
+.button-icon {
+  width: var(--control-touch-target);
+  min-width: var(--control-touch-target);
+  height: var(--control-touch-target);
+  min-height: var(--control-touch-target);
+  padding: 0;
+  flex: 0 0 var(--control-touch-target);
+}
+
+.button-icon svg { width: 18px; height: 18px; }
+.button-icon-danger { color: var(--danger); background: transparent; }
+.button-icon-danger:hover { color: var(--danger); background: var(--surface-hover); }
+
+.is-spinning { animation: control-spin 720ms linear infinite; }
+
+@keyframes control-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .is-spinning { animation-duration: 1.6s; }
+}
+
 .privacy-note {
   margin: -2px 0 0;
   display: inline-flex;
@@ -745,6 +768,19 @@ h1 {
   font-weight: 650;
   cursor: pointer;
 }
+
+.back-button-icon {
+  width: var(--control-touch-target);
+  min-width: var(--control-touch-target);
+  height: var(--control-touch-target);
+  min-height: var(--control-touch-target);
+  padding: 0;
+  justify-content: center;
+  border-radius: var(--radius-control);
+}
+
+.back-button-icon:hover,
+.back-button-icon:focus-visible { background: var(--surface-hover); }
 
 .back-button:hover, .text-button:hover { color: var(--text-primary); }
 .back-button:disabled { opacity: 0.55; cursor: wait; }
@@ -1056,7 +1092,7 @@ h1 {
   flex: 0 0 auto;
 }
 
-.vault-browser-actions .button {
+.vault-browser-actions .button:not(.button-icon) {
   width: max-content;
   min-height: var(--control-touch-target);
   padding-inline: 16px;
@@ -1557,13 +1593,13 @@ h1 {
 }
 
 .protected-copy-button {
-  min-width: 82px;
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
   min-height: 40px;
-  padding: 0 12px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
+  padding: 0;
+  display: grid;
+  place-items: center;
   color: var(--text-secondary);
   background: var(--surface-3);
   border: 1px solid var(--border-subtle);
@@ -1590,7 +1626,7 @@ h1 {
 .copy-status.is-error { color: var(--danger); }
 
 @media (pointer: coarse) {
-  .protected-copy-button { min-height: 44px; }
+  .protected-copy-button { width: 44px; min-width: 44px; height: 44px; min-height: 44px; }
 }
 
 .entry-type-picker { display: grid; gap: 16px; }
