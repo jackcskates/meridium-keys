@@ -109,10 +109,34 @@ function DeleteVaultDialog({ vault, isDeleting, error, onCancel, onDelete }: {
 }
 
 function UpdatePrompt() {
+  const [registration, setRegistration] = useState<ServiceWorkerRegistration | null>(null)
   const {
     needRefresh: [needRefresh],
     updateServiceWorker,
-  } = useRegisterSW()
+  } = useRegisterSW({
+    immediate: true,
+    onRegisteredSW: (_serviceWorkerUrl, currentRegistration) => {
+      setRegistration(currentRegistration ?? null)
+      void currentRegistration?.update().catch(() => undefined)
+    },
+  })
+
+  useEffect(() => {
+    if (!registration) return
+
+    const checkForUpdate = () => {
+      if (document.visibilityState === 'visible' && navigator.onLine) {
+        void registration.update().catch(() => undefined)
+      }
+    }
+
+    document.addEventListener('visibilitychange', checkForUpdate)
+    window.addEventListener('online', checkForUpdate)
+    return () => {
+      document.removeEventListener('visibilitychange', checkForUpdate)
+      window.removeEventListener('online', checkForUpdate)
+    }
+  }, [registration])
 
   if (!needRefresh) return null
 
@@ -267,6 +291,7 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
   const [isUnlocking, setIsUnlocking] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const vaultSessionRef = useRef<UnlockedVaultSession | null>(null)
+  const vaultPasswordInputRef = useRef<HTMLInputElement>(null)
   const dropboxConnected = dropbox.isConnected
   const totalVaults = dropbox.vaults.length + (selectedStorage === 'device' && selectedFile ? 1 : 0)
   const activeView = dropbox.isConnected && view === 'connect' ? 'vaults' : view
@@ -369,7 +394,6 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
     event.preventDefault()
     const form = event.currentTarget
     const password = String(new FormData(form).get('masterPassword') ?? '')
-    form.reset()
 
     if (!selectedVaultFile) {
       setUnlockError('Choose a standard .kdbx vault file.')
@@ -385,9 +409,14 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
       vaultSessionRef.current?.close()
       vaultSessionRef.current = opened.session
       setVaultSnapshot(opened.vault)
+      form.reset()
       setView('browse')
     } catch (error) {
       setUnlockError(error instanceof VaultOpenError ? error.message : 'The vault could not be opened safely.')
+      window.requestAnimationFrame(() => {
+        vaultPasswordInputRef.current?.focus()
+        vaultPasswordInputRef.current?.select()
+      })
     } finally {
       setIsUnlocking(false)
       setUnlockStage(null)
@@ -694,13 +723,16 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
                       <input
                         aria-describedby={passwordGuideOpen ? 'vault-password-requirements' : undefined}
                         aria-invalid={formTouched && !passwordReady}
-                        autoComplete="new-password"
+                        autoCapitalize="none"
+                        autoComplete="off"
+                        autoCorrect="off"
                         disabled={Boolean(createStage)}
                         maxLength={128}
                         minLength={15}
                         onChange={(event) => setPassword(event.target.value)}
                         placeholder="A few unrelated words work well"
                         required
+                        spellCheck={false}
                         type={showPassword ? 'text' : 'password'}
                         value={password}
                       />
@@ -726,7 +758,7 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
 
                   <label className="field">
                     <span>Confirm master password</span>
-                    <input aria-invalid={formTouched && !passwordsMatch} autoComplete="new-password" disabled={Boolean(createStage)} maxLength={128} minLength={15} onChange={(event) => setConfirmation(event.target.value)} required type={showPassword ? 'text' : 'password'} value={confirmation} />
+                    <input aria-invalid={formTouched && !passwordsMatch} autoCapitalize="none" autoComplete="off" autoCorrect="off" disabled={Boolean(createStage)} maxLength={128} minLength={15} onChange={(event) => setConfirmation(event.target.value)} required spellCheck={false} type={showPassword ? 'text' : 'password'} value={confirmation} />
                     {formTouched && !passwordsMatch && <small className="field-error">The passwords must match.</small>}
                   </label>
                 </div>
@@ -763,8 +795,9 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
               </div>
               <label className="field">
                 <span>Master password</span>
-                <div className="secret-input"><input autoFocus autoComplete="current-password" disabled={isUnlocking} name="masterPassword" required type={showPassword ? 'text' : 'password'} /><button aria-label={showPassword ? 'Hide master password' : 'Show master password'} onClick={() => setShowPassword((current) => !current)} type="button"><Icon name={showPassword ? 'eye-off' : 'eye'} /></button></div>
+                <div className="secret-input"><input autoCapitalize="none" autoComplete="off" autoCorrect="off" autoFocus disabled={isUnlocking} name="masterPassword" ref={vaultPasswordInputRef} required spellCheck={false} type={showPassword ? 'text' : 'password'} /><button aria-label={showPassword ? 'Hide master password' : 'Show master password'} onClick={() => setShowPassword((current) => !current)} type="button"><Icon name={showPassword ? 'eye-off' : 'eye'} /></button></div>
               </label>
+              <p className="field-note">Vault passwords are case-sensitive. Every space and punctuation mark must match exactly.</p>
               {unlockError && <p className="unlock-error" role="alert">{unlockError}</p>}
               <button className="button button-primary button-wide" disabled={isUnlocking} type="submit"><Icon name="key" />{isUnlocking ? `${unlockStage === 'mapping' ? 'Preparing' : unlockStage === 'reading' ? 'Reading' : 'Decrypting'} vault…` : 'Unlock vault'}</button>
               <button className="text-button" disabled={isUnlocking} onClick={() => fileInputRef.current?.click()} type="button">Choose another KDBX file</button>

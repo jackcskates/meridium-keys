@@ -7,7 +7,9 @@ Last verified: 2026-09-10.
 - Local Vite, React, and TypeScript development environment.
 - Installable PWA shell with offline application assets, regular and maskable
   Meridium icons, iOS standalone metadata, native Chromium install prompting,
-  iPhone/iPad installation guidance, and an explicit update prompt.
+  iPhone/iPad installation guidance, and an explicit update prompt. Installed
+  clients check for a new service worker at launch, when returning to the
+  foreground, and when connectivity returns.
 - Phone install icons now use the same approximately 70-percent Meridium-mark
   scale as desktop icons, with cache-busted manifest and Apple touch references.
 - Phone safe-area handling plus live online/offline Dropbox status and automatic
@@ -17,6 +19,10 @@ Last verified: 2026-09-10.
 - Mobile-safe App Lock input disables capitalization and correction, accepts
   accidental whitespace around a pasted value, retains failed input for
   correction, and distinguishes the app password from vault master passwords.
+- Vault master-password fields disable iOS capitalization, correction, spelling,
+  and site-password autofill even while revealed. Failed unlock attempts retain
+  the entered value for inspection and correction while preserving byte-exact
+  KDBX password matching.
 - Responsive Meridium application frame with a collapsible vault sidebar.
 - Home navigation naming, icon-free storage section labels, explicit green
   Dropbox-ready status, and a bottom placeholder profile/sign-out area.

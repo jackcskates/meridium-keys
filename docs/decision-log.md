@@ -229,6 +229,17 @@ they never existed; mark them superseded and link to the replacement.
   vaults in the workspace adds clutter and weakens the two meaningful start
   actions.
 
+### D-031 - Mobile vault-password entry
+
+- **Status:** Accepted
+- **Decision:** Disable automatic capitalization, correction, spelling, and
+  site-password autofill on every vault master-password field, including when a
+  user reveals the value as text. Keep a failed unlock value in the volatile
+  field so it can be inspected or corrected, and clear it after successful
+  unlock. Never trim or normalize a KDBX master password.
+- **Reason:** iOS input assistance and same-origin credential autofill must not
+  silently change or replace an independently encrypted vault password.
+
 ## Open
 
 ### D-005 - Standard KDBX compatibility

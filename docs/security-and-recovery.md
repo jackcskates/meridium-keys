@@ -37,8 +37,12 @@ encrypts persisted Dropbox authorization and cached KDBX bytes.
 ### Master password
 
 - Entered only into the create or unlock flow for one vault.
+- iOS capitalization, correction, spelling, and site-password autofill are
+  disabled because a KDBX password is not the app's website credential.
+- A failed unlock leaves the value only in the visible form long enough for the
+  user to inspect or correct it; successful unlock clears the form.
 - Passed to the cryptographic worker without logging or serialization.
-- Removed from form state immediately after use.
+- Cleared after successful unlock or when the unlock view is left.
 - Never stored for automatic unlock until a separate reviewed design exists.
 - New vault creation currently requires 15–128 Unicode characters, rejects a
   small local set of common examples and repeated single-character values,

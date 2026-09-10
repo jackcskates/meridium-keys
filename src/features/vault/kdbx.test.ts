@@ -39,6 +39,17 @@ describe('readKdbxSnapshot', () => {
     await expect(readKdbxSnapshot(data, 'wrong password')).rejects.toMatchObject({ code: 'INVALID_CREDENTIALS' })
   })
 
+  it('keeps vault master passwords byte-exact across punctuation, case, and spaces', async () => {
+    const exactPassword = 'Moon$River.4!5 has spaces'
+    const data = await createKdbxData('Exact Password Fixture', exactPassword)
+
+    await expect(readKdbxSnapshot(data, exactPassword, 'exact-password.kdbx')).resolves.toMatchObject({
+      databaseName: 'Exact Password Fixture',
+    })
+    await expect(readKdbxSnapshot(data, exactPassword.toLocaleLowerCase())).rejects.toMatchObject({ code: 'INVALID_CREDENTIALS' })
+    await expect(readKdbxSnapshot(data, ` ${exactPassword} `)).rejects.toMatchObject({ code: 'INVALID_CREDENTIALS' })
+  })
+
   it.each([
     ['KDBX 4 Argon2id', Consts.KdfId.Argon2id],
     ['KDBX 4 AES-KDF', Consts.KdfId.Aes],
