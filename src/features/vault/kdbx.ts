@@ -12,6 +12,8 @@ import {
   type KdbxGroup,
 } from 'kdbxweb'
 import type {
+  VaultEntryDetails,
+  VaultEntryDraft,
   VaultEntrySummary,
   VaultGroupSummary,
   VaultOpenErrorCode,
@@ -103,10 +105,13 @@ function mapGroup(
   depth: number,
   groups: VaultGroupSummary[],
   entries: VaultEntrySummary[],
+  recycleBinId: string,
+  insideRecycleBin = false,
 ) {
   const name = group.name?.trim() || 'Untitled group'
   const pathParts = [...parentPath, name]
   const groupId = group.uuid.toString()
+  const isRecycleBin = insideRecycleBin || groupId === recycleBinId
 
   groups.push({
     id: groupId,
@@ -114,6 +119,7 @@ function mapGroup(
     path: pathParts.join(' / '),
     depth,
     entryCount: group.entries.length,
+    isRecycleBin,
   })
 
   for (const entry of group.entries) {
@@ -125,15 +131,16 @@ function mapGroup(
       url: plainField(entry, 'URL'),
       hasPassword: hasProtectedPassword(entry),
       icon: typeof entry.icon === 'number' ? entry.icon : null,
+      isDeleted: isRecycleBin,
     })
   }
 
   for (const child of group.groups) {
-    mapGroup(child, pathParts, depth + 1, groups, entries)
+    mapGroup(child, pathParts, depth + 1, groups, entries, recycleBinId, isRecycleBin)
   }
 }
 
-function mapError(error: unknown): VaultOpenError {
+export function mapKdbxError(error: unknown): VaultOpenError {
   if (error instanceof VaultOpenError) return error
 
   if (error instanceof KdbxError) {
@@ -154,35 +161,123 @@ function mapError(error: unknown): VaultOpenError {
   return new VaultOpenError('WORKER_FAILURE', 'The vault could not be opened. No vault data was retained.')
 }
 
+export function mapKdbxSnapshot(database: Kdbx, fileName = 'Vault.kdbx'): VaultSnapshot {
+  const groups: VaultGroupSummary[] = []
+  const entries: VaultEntrySummary[] = []
+
+  const recycleBinId = database.meta.recycleBinUuid?.toString() || ''
+  for (const root of database.groups) {
+    mapGroup(root, [], 0, groups, entries, recycleBinId)
+  }
+
+  return {
+    fileName,
+    databaseName: database.meta.name?.trim() || fileName.replace(/\.kdbx$/i, ''),
+    version: `${database.versionMajor}.${database.versionMinor}`,
+    groups,
+    entries,
+  }
+}
+
+export async function loadKdbxDatabase(data: ArrayBuffer, password: string) {
+  if (!password) throw new VaultOpenError('EMPTY_PASSWORD', 'Enter this vault’s master password.')
+
+  configureArgon2()
+  try {
+    return await Kdbx.load(data, new Credentials(ProtectedValue.fromString(password)))
+  } catch (error) {
+    throw mapKdbxError(error)
+  }
+}
+
+function findEntry(database: Kdbx, entryId: string) {
+  for (const root of database.groups) {
+    for (const entry of root.allEntries()) {
+      if (entry.uuid.toString() === entryId) return entry
+    }
+  }
+  return undefined
+}
+
+function entryFieldText(entry: KdbxEntry, name: string) {
+  const value = entry.fields.get(name)
+  return value instanceof ProtectedValue ? value.getText() : typeof value === 'string' ? value : ''
+}
+
+export function readKdbxEntryDetails(database: Kdbx, entryId: string): VaultEntryDetails {
+  const entry = findEntry(database, entryId)
+  if (!entry?.parentGroup) throw new VaultOpenError('WORKER_FAILURE', 'That entry could not be found in the open vault.')
+
+  return {
+    id: entry.uuid.toString(),
+    groupId: entry.parentGroup.uuid.toString(),
+    title: entryFieldText(entry, 'Title'),
+    username: entryFieldText(entry, 'UserName'),
+    password: entryFieldText(entry, 'Password'),
+    url: entryFieldText(entry, 'URL'),
+    notes: entryFieldText(entry, 'Notes'),
+  }
+}
+
+export async function prepareKdbxEntrySave(database: Kdbx, draft: VaultEntryDraft, fileName: string) {
+  if (!draft.title.trim()) throw new VaultOpenError('WORKER_FAILURE', 'Give this entry a name before saving it.')
+
+  try {
+    const clonedData = await database.save()
+    const workingDatabase = await Kdbx.load(clonedData, database.credentials)
+    const group = workingDatabase.getGroup(draft.groupId) || workingDatabase.getDefaultGroup()
+    let entry = draft.id ? findEntry(workingDatabase, draft.id) : undefined
+
+    if (draft.id && !entry) throw new VaultOpenError('WORKER_FAILURE', 'That entry no longer exists in the open vault.')
+    if (entry) {
+      entry.pushHistory()
+      if (entry.parentGroup !== group) workingDatabase.move(entry, group)
+    } else {
+      entry = workingDatabase.createEntry(group)
+    }
+
+    entry.fields.set('Title', draft.title.trim())
+    entry.fields.set('UserName', draft.username)
+    entry.fields.set('Password', ProtectedValue.fromString(draft.password))
+    entry.fields.set('URL', draft.url)
+    entry.fields.set('Notes', draft.notes)
+    entry.times.update()
+
+    const data = await workingDatabase.save()
+    return {
+      database: workingDatabase,
+      data,
+      vault: mapKdbxSnapshot(workingDatabase, fileName),
+      entryId: entry.uuid.toString(),
+    }
+  } catch (error) {
+    throw mapKdbxError(error)
+  }
+}
+
+export async function prepareKdbxEntryDelete(database: Kdbx, entryId: string, fileName: string) {
+  try {
+    const clonedData = await database.save()
+    const workingDatabase = await Kdbx.load(clonedData, database.credentials)
+    const entry = findEntry(workingDatabase, entryId)
+    if (!entry) throw new VaultOpenError('WORKER_FAILURE', 'That entry no longer exists in the open vault.')
+    workingDatabase.remove(entry)
+    const data = await workingDatabase.save()
+    return {
+      database: workingDatabase,
+      data,
+      vault: mapKdbxSnapshot(workingDatabase, fileName),
+    }
+  } catch (error) {
+    throw mapKdbxError(error)
+  }
+}
+
 export async function readKdbxSnapshot(
   data: ArrayBuffer,
   password: string,
   fileName = 'Vault.kdbx',
 ): Promise<VaultSnapshot> {
-  if (!password) {
-    throw new VaultOpenError('EMPTY_PASSWORD', 'Enter this vault’s master password.')
-  }
-
-  configureArgon2()
-
-  try {
-    const credentials = new Credentials(ProtectedValue.fromString(password))
-    const database = await Kdbx.load(data, credentials)
-    const groups: VaultGroupSummary[] = []
-    const entries: VaultEntrySummary[] = []
-
-    for (const root of database.groups) {
-      mapGroup(root, [], 0, groups, entries)
-    }
-
-    return {
-      fileName,
-      databaseName: database.meta.name?.trim() || fileName.replace(/\.kdbx$/i, ''),
-      version: `${database.versionMajor}.${database.versionMinor}`,
-      groups,
-      entries,
-    }
-  } catch (error) {
-    throw mapError(error)
-  }
+  const database = await loadKdbxDatabase(data, password)
+  return mapKdbxSnapshot(database, fileName)
 }

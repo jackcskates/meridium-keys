@@ -58,6 +58,12 @@ encrypts persisted Dropbox authorization and cached KDBX bytes.
 - Is destroyed on explicit lock and automatic-lock events.
 - Must not be serialized by debugging tools, state-persistence middleware, or
   analytics.
+- Protected entry passwords remain inside the worker until the user opens an
+  entry editor. The editor holds the active draft in volatile React memory only
+  and clears it on save, cancel, lock, or unmount.
+- Entry changes are encrypted into a provisional KDBX revision in the worker.
+  The worker commits that revision only after Dropbox accepts the expected
+  remote revision; failed or conflicting uploads discard the provisional model.
 
 ### Clipboard
 
@@ -120,11 +126,13 @@ key-rotation behavior, deletion behavior, and what happens after recovery.
 - Explicit lock removes the decrypted snapshot and rendered entry metadata.
 - A newly created standard KDBX 4 vault reopens with its chosen password and
   rejects a wrong password in automated tests.
+- Added and edited entries reopen through the standard KDBX parser with protected
+  fields intact; deleted entries reopen in the standard KDBX Recycle Bin.
 - Dependency audit currently reports no known vulnerabilities.
 
-This verifies creation and the current read-only slice only; it is not a complete
-security assessment of editing, persistence, synchronization conflicts, recovery,
-or production use.
+This verifies creation and the initial revision-safe entry-write slice; it is not
+a complete security assessment of persistent authorization, offline editing,
+multi-client merge, recovery, or production use.
 
 ## Non-goals for the first implementation
 

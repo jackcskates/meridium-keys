@@ -1,4 +1,4 @@
-import { useRef, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useRegisterSW } from 'virtual:pwa-register/react'
 import { verifyAppPassword } from './features/app-lock/verifyAppPassword'
 import type { DropboxVaultFile } from './features/dropbox/types'
@@ -8,8 +8,8 @@ import { VaultBrowser } from './features/vault/VaultBrowser'
 import { createVaultFile, toVaultFileName, type CreateVaultStage } from './features/vault/createVault'
 import { VaultOpenError } from './features/vault/kdbx'
 import { vaultPasswordRequirements } from './features/vault/passwordPolicy'
-import type { VaultSnapshot } from './features/vault/types'
-import { unlockVaultFile, type UnlockStage } from './features/vault/unlockVault'
+import type { VaultEntryDraft, VaultSnapshot } from './features/vault/types'
+import { openVaultSession, type PreparedVaultEntrySave, type UnlockedVaultSession, type UnlockStage } from './features/vault/unlockVault'
 import './App.css'
 
 type View = 'connect' | 'vaults' | 'create' | 'unlock' | 'browse'
@@ -29,6 +29,7 @@ type IconName =
   | 'plus'
   | 'refresh'
   | 'shield'
+  | 'trash'
 
 function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
   const paths: Record<IconName, React.ReactNode> = {
@@ -46,6 +47,7 @@ function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
     plus: <><path d="M12 5v14M5 12h14" /></>,
     refresh: <><path d="M20 7v5h-5" /><path d="M4 17a8 8 0 0 0 13.7-2M4 17v-5h5M20 7A8 8 0 0 0 6.3 9" /></>,
     shield: <><path d="M12 3 20 6v5c0 5-3.2 8.4-8 10-4.8-1.6-8-5-8-10V6Z" /><path d="m9 12 2 2 4-4" /></>,
+    trash: <><path d="M4 7h16" /><path d="M9 7V4h6v3" /><path d="m6 7 1 14h10l1-14" /><path d="M10 11v6M14 11v6" /></>,
   }
 
   return (
@@ -54,6 +56,55 @@ function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
         {paths[name]}
       </g>
     </svg>
+  )
+}
+
+function DeleteVaultDialog({ vault, isDeleting, error, onCancel, onDelete }: {
+  vault: DropboxVaultFile
+  isDeleting: boolean
+  error: string
+  onCancel: () => void
+  onDelete: () => void
+}) {
+  const dialogRef = useRef<HTMLDialogElement>(null)
+  const cancelRef = useRef<HTMLButtonElement>(null)
+  const vaultLabel = vault.name.replace(/\.kdbx$/i, '')
+
+  useEffect(() => {
+    const dialog = dialogRef.current
+    if (!dialog) return
+    dialog.showModal()
+    cancelRef.current?.focus({ preventScroll: true })
+    return () => {
+      if (dialog.open) dialog.close()
+    }
+  }, [])
+
+  return (
+    <dialog
+      aria-describedby="delete-vault-description"
+      aria-labelledby="delete-vault-title"
+      className="confirm-dialog"
+      onCancel={(event) => {
+        event.preventDefault()
+        if (!isDeleting) onCancel()
+      }}
+      ref={dialogRef}
+    >
+      <div className="confirm-dialog-card">
+        <span className="confirm-dialog-icon"><Icon name="trash" size={24} /></span>
+        <div className="confirm-dialog-copy">
+          <p className="eyebrow">Delete Dropbox vault</p>
+          <h2 id="delete-vault-title">Delete {vaultLabel}?</h2>
+          <p id="delete-vault-description">This deletes the encrypted KDBX file from Dropbox. You do not need its master password. Dropbox may keep it in deleted files for a limited recovery period.</p>
+        </div>
+        {error && <p className="unlock-error" role="alert">{error}</p>}
+        <div className="confirm-dialog-actions">
+          <button className="button button-secondary" disabled={isDeleting} onClick={onCancel} ref={cancelRef} type="button">Cancel</button>
+          <button className="button button-danger" disabled={isDeleting} onClick={onDelete} type="button"><Icon name="trash" />{isDeleting ? 'Deleting…' : `Delete ${vaultLabel}`}</button>
+        </div>
+      </div>
+    </dialog>
   )
 }
 
@@ -194,12 +245,17 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
   const [selectedVaultFile, setSelectedVaultFile] = useState<File | null>(null)
   const [selectedStorage, setSelectedStorage] = useState<'device' | 'dropbox' | null>(null)
   const [activeDropboxVaultId, setActiveDropboxVaultId] = useState('')
+  const [activeDropboxVault, setActiveDropboxVault] = useState<DropboxVaultFile | null>(null)
   const [openingDropboxVaultId, setOpeningDropboxVaultId] = useState('')
+  const [vaultToDelete, setVaultToDelete] = useState<DropboxVaultFile | null>(null)
+  const [deletingDropboxVaultId, setDeletingDropboxVaultId] = useState('')
+  const [deleteError, setDeleteError] = useState('')
   const [vaultSnapshot, setVaultSnapshot] = useState<VaultSnapshot | null>(null)
   const [unlockError, setUnlockError] = useState('')
   const [unlockStage, setUnlockStage] = useState<UnlockStage | null>(null)
   const [isUnlocking, setIsUnlocking] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const vaultSessionRef = useRef<UnlockedVaultSession | null>(null)
   const dropboxConnected = dropbox.isConnected
   const totalVaults = dropbox.vaults.length + (selectedStorage === 'device' && selectedFile ? 1 : 0)
   const activeView = dropbox.isConnected && view === 'connect' ? 'vaults' : view
@@ -225,10 +281,18 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
         ? 'Create vault'
         : selectedFile.replace(/\.kdbx$/i, '') || 'Unlock vault'
 
+  useEffect(() => () => vaultSessionRef.current?.close(), [])
+
   function openFile(file?: File, storage: 'device' | 'dropbox' = 'device') {
     if (!file) return
+    vaultSessionRef.current?.close()
+    vaultSessionRef.current = null
     setSelectedFile(file.name)
     setSelectedStorage(storage)
+    if (storage === 'device') {
+      setActiveDropboxVaultId('')
+      setActiveDropboxVault(null)
+    }
     setVaultSnapshot(null)
     setUnlockError('')
     if (!file.name.toLowerCase().endsWith('.kdbx')) {
@@ -245,12 +309,46 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
     try {
       const file = await dropbox.download(vault)
       setActiveDropboxVaultId(vault.id)
+      setActiveDropboxVault(vault)
       openFile(file, 'dropbox')
     } catch (error) {
       setUnlockError(error instanceof Error ? error.message : `${vault.name} could not be opened from Dropbox.`)
       setView('vaults')
     } finally {
       setOpeningDropboxVaultId('')
+    }
+  }
+
+  function requestDeleteVault(vault: DropboxVaultFile) {
+    setDeleteError('')
+    setVaultToDelete(vault)
+  }
+
+  async function confirmDeleteVault() {
+    if (!vaultToDelete) return
+    const vault = vaultToDelete
+    setDeleteError('')
+    setDeletingDropboxVaultId(vault.id)
+
+    try {
+      await dropbox.remove(vault)
+      if (activeDropboxVaultId === vault.id) {
+        vaultSessionRef.current?.close()
+        vaultSessionRef.current = null
+        setActiveDropboxVaultId('')
+        setActiveDropboxVault(null)
+        setSelectedFile('')
+        setSelectedStorage(null)
+        setSelectedVaultFile(null)
+        setVaultSnapshot(null)
+        setUnlockError('')
+        setView('vaults')
+      }
+      setVaultToDelete(null)
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : `${vault.name} could not be deleted from Dropbox.`)
+    } finally {
+      setDeletingDropboxVaultId('')
     }
   }
 
@@ -270,8 +368,10 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
     setIsUnlocking(true)
 
     try {
-      const snapshot = await unlockVaultFile(selectedVaultFile, password, setUnlockStage)
-      setVaultSnapshot(snapshot)
+      const opened = await openVaultSession(selectedVaultFile, password, setUnlockStage)
+      vaultSessionRef.current?.close()
+      vaultSessionRef.current = opened.session
+      setVaultSnapshot(opened.vault)
       setView('browse')
     } catch (error) {
       setUnlockError(error instanceof VaultOpenError ? error.message : 'The vault could not be opened safely.')
@@ -282,6 +382,8 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
   }
 
   function lockVault() {
+    vaultSessionRef.current?.close()
+    vaultSessionRef.current = null
     setVaultSnapshot(null)
     setUnlockError('')
     setView('unlock')
@@ -314,6 +416,7 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
       setCreateStage('uploading')
       const uploadedVault = await dropbox.upload(file)
       setActiveDropboxVaultId(uploadedVault.id)
+      setActiveDropboxVault(uploadedVault)
       setVaultName('')
       setFormTouched(false)
       openFile(file, 'dropbox')
@@ -333,6 +436,51 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
     setCreateError('')
     setCreateStage(null)
     setView('vaults')
+  }
+
+  async function persistPreparedVaultChange(prepared: PreparedVaultEntrySave) {
+    const session = vaultSessionRef.current
+    const remoteVault = activeDropboxVault
+    if (!session || !remoteVault || selectedStorage !== 'dropbox') {
+      if (session) await session.finishEntrySave(prepared.changeId, false)
+      throw new Error('Open this vault from Dropbox before saving changes.')
+    }
+
+    const encryptedFile = new File([prepared.data], remoteVault.name, { type: 'application/octet-stream' })
+    try {
+      const updatedVault = await dropbox.save(remoteVault, encryptedFile)
+      const committedVault = await session.finishEntrySave(prepared.changeId, true)
+      setActiveDropboxVault(updatedVault)
+      setActiveDropboxVaultId(updatedVault.id)
+      setSelectedVaultFile(encryptedFile)
+      setVaultSnapshot(committedVault)
+      return committedVault
+    } catch (error) {
+      try {
+        await session.finishEntrySave(prepared.changeId, false)
+      } catch {
+        session.close()
+        vaultSessionRef.current = null
+        setVaultSnapshot(null)
+        setView('unlock')
+      }
+      throw error
+    }
+  }
+
+  async function saveVaultEntry(entry: VaultEntryDraft) {
+    const session = vaultSessionRef.current
+    if (!session) throw new Error('The vault is locked. Open it again before saving an entry.')
+    const prepared = await session.prepareEntrySave(entry)
+    const committedVault = await persistPreparedVaultChange(prepared)
+    if (!prepared.entryId) throw new Error('The entry was saved but could not be selected afterward.')
+    return { entryId: prepared.entryId, vault: committedVault }
+  }
+
+  async function deleteVaultEntry(entryId: string) {
+    const session = vaultSessionRef.current
+    if (!session) throw new Error('The vault is locked. Open it again before deleting an entry.')
+    return persistPreparedVaultChange(await session.prepareEntryDelete(entryId))
   }
 
   return (
@@ -398,7 +546,7 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
                 type="button"
               >
                 <span className="vault-avatar">{vault.name.slice(0, 1).toUpperCase()}<span className="vault-lock"><Icon name={activeDropboxVaultId === vault.id && vaultSnapshot ? 'check' : 'lock'} size={11} /></span></span>
-                <span className="sidebar-row-copy"><strong>{vault.name.replace(/\.kdbx$/i, '')}</strong><small>{openingDropboxVaultId === vault.id ? 'Downloading…' : activeDropboxVaultId === vault.id && vaultSnapshot ? 'Open · read only' : 'Dropbox · locked'}</small></span>
+                <span className="sidebar-row-copy"><strong>{vault.name.replace(/\.kdbx$/i, '')}</strong><small>{openingDropboxVaultId === vault.id ? 'Downloading…' : activeDropboxVaultId === vault.id && vaultSnapshot ? 'Open · editable' : 'Dropbox · locked'}</small></span>
               </button>
             ))}
             {!dropbox.vaults.length && <p className="sidebar-empty">{dropbox.status === 'loading' || dropbox.status === 'connecting' ? 'Connecting…' : dropboxConnected ? 'No vaults found' : 'Not connected'}</p>}
@@ -423,7 +571,7 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
               <span className="status-dot" />
               <span>{!pwa.isOnline ? 'Offline' : dropbox.status === 'connecting' || dropbox.status === 'loading' ? 'Connecting Dropbox' : dropboxConnected ? 'Dropbox ready' : 'Not connected'}</span>
             </div>
-            <button className="topbar-lock" aria-label="Lock Meridium Keys" onClick={onLockApp} title="Lock app" type="button"><Icon name="lock" size={18} /></button>
+            <button className="topbar-lock" aria-label="Lock Meridium Keys" onClick={() => { vaultSessionRef.current?.close(); vaultSessionRef.current = null; onLockApp() }} title="Lock app" type="button"><Icon name="lock" size={18} /></button>
           </div>
         </header>
 
@@ -473,11 +621,24 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
               {dropbox.vaults.length ? (
                 <div className="dropbox-vault-list" aria-label="Dropbox vaults">
                   {dropbox.vaults.map((vault) => (
-                    <button disabled={Boolean(openingDropboxVaultId)} key={vault.id} onClick={() => void openDropboxVault(vault)} type="button">
-                      <span className="vault-avatar">{vault.name.slice(0, 1).toUpperCase()}</span>
-                      <span><strong>{vault.name.replace(/\.kdbx$/i, '')}</strong><small>{vault.pathDisplay} · {(vault.size / 1024).toFixed(1)} KB</small></span>
-                      <span>{openingDropboxVaultId === vault.id ? 'Downloading…' : 'Open'}</span>
-                    </button>
+                    <div className="dropbox-vault-row" key={vault.id}>
+                      <button className="dropbox-vault-open" disabled={Boolean(openingDropboxVaultId || deletingDropboxVaultId)} onClick={() => void openDropboxVault(vault)} type="button">
+                        <span className="vault-avatar">{vault.name.slice(0, 1).toUpperCase()}</span>
+                        <span><strong>{vault.name.replace(/\.kdbx$/i, '')}</strong><small>{vault.pathDisplay} · {(vault.size / 1024).toFixed(1)} KB</small></span>
+                        <span>{openingDropboxVaultId === vault.id ? 'Downloading…' : 'Open'}</span>
+                      </button>
+                      <button
+                        aria-haspopup="dialog"
+                        aria-label={`Delete ${vault.name.replace(/\.kdbx$/i, '')} from Dropbox`}
+                        className="vault-delete-button"
+                        disabled={Boolean(openingDropboxVaultId || deletingDropboxVaultId)}
+                        onClick={() => requestDeleteVault(vault)}
+                        title={`Delete ${vault.name.replace(/\.kdbx$/i, '')} from Dropbox`}
+                        type="button"
+                      >
+                        <Icon name="trash" size={18} />
+                      </button>
+                    </div>
                   ))}
                 </div>
               ) : (
@@ -596,12 +757,38 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
             </form>
           )}
 
-          {activeView === 'browse' && vaultSnapshot && <VaultBrowser onLock={lockVault} vault={vaultSnapshot} />}
+          {activeView === 'browse' && vaultSnapshot && (
+            <VaultBrowser
+              canEdit={selectedStorage === 'dropbox' && Boolean(activeDropboxVault)}
+              onDeleteEntry={deleteVaultEntry}
+              onLoadEntry={(entryId) => {
+                const session = vaultSessionRef.current
+                return session ? session.getEntry(entryId) : Promise.reject(new Error('The vault is locked. Open it again before editing an entry.'))
+              }}
+              onLock={lockVault}
+              onSaveEntry={saveVaultEntry}
+              vault={vaultSnapshot}
+            />
+          )}
         </section>
 
       </main>
 
       <input accept=".kdbx,application/octet-stream" aria-hidden="true" className="visually-hidden" onChange={(event) => { openFile(event.target.files?.[0]); event.currentTarget.value = '' }} ref={fileInputRef} tabIndex={-1} type="file" />
+      {vaultToDelete && (
+        <DeleteVaultDialog
+          error={deleteError}
+          isDeleting={deletingDropboxVaultId === vaultToDelete.id}
+          onCancel={() => {
+            if (!deletingDropboxVaultId) {
+              setDeleteError('')
+              setVaultToDelete(null)
+            }
+          }}
+          onDelete={() => void confirmDeleteVault()}
+          vault={vaultToDelete}
+        />
+      )}
       <InstallPrompt canPromptInstall={pwa.canPromptInstall} install={pwa.install} isIos={pwa.isIos} isStandalone={pwa.isStandalone} />
       <UpdatePrompt />
     </div>

@@ -114,6 +114,30 @@ they never existed; mark them superseded and link to the replacement.
 - **Limitation:** This is local validation only. A maintained compromised-password
   check requires a separate privacy-preserving design.
 
+### D-021 - Revision-safe Dropbox entry writes
+
+- **Status:** Accepted
+- **Decision:** Add and edit Login-compatible KDBX entries inside the dedicated
+  crypto worker. Treat the worker change as provisional until Dropbox accepts an
+  encrypted upload over the exact revision that was opened; discard the
+  provisional change on upload failure or conflict.
+- **Reason:** Entry editing must not silently overwrite another device's newer
+  vault or expose plaintext fields to Dropbox.
+- **Limitation:** Local device files remain read only until a reviewed writable
+  file-handle or explicit encrypted-download workflow is implemented.
+
+### D-022 - Destructive vault and entry actions
+
+- **Status:** Accepted
+- **Decision:** A connected Dropbox vault can be deleted from the library without
+  opening the KDBX file or knowing its master password. Name the vault in a modal
+  confirmation and delete only the listed Dropbox revision. Entry deletion while
+  unlocked moves the entry into the standard KDBX Recycle Bin and uploads the
+  resulting encrypted revision.
+- **Reason:** A broken or unwanted vault must remain manageable independently of
+  its credential, while both destructive actions stay deliberate and compatible
+  with Dropbox and KDBX recovery behavior.
+
 ## Open
 
 ### D-005 - Standard KDBX compatibility

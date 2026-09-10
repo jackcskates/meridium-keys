@@ -37,7 +37,9 @@ for careful credential work, with lock and sync status always explicit.
   No additional accent colors are permitted without owner approval.
 - The main interface is monochrome: `#0f0f0f` canvas, `#252525` surfaces,
   `#3a3a3a` raised/input surfaces, and the exact Style Lab neutral text ramp.
-- Green is limited to the mark and restrained selection/emphasis cues. Primary
+- Green is limited to the mark and meaningful completion cues. Navigation and
+  list selection use neutral surfaces without rounded side rails or colored edge
+  accents. Primary
   actions follow the Actions lab and remain light-on-dark, not coral-filled.
 - Plus Jakarta Sans is the content face; Inter is the system/control face.
 - Cards use a 1rem radius; controls use 0.75rem; touch targets are at least
@@ -123,7 +125,7 @@ should include:
 1. Vault rail with representative locked and unlocked states.
 2. Unlock panel for the selected vault.
 3. Unlocked search and item-list surface.
-4. Read-only item detail with masked secret, Copy, and Reveal actions.
+4. Item detail with masked secret plus add, edit, and delete actions.
 5. Clear local/offline/Dropbox status.
 
 It should use realistic but fictional data and contain no real credentials.

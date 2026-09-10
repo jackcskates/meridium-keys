@@ -111,6 +111,60 @@ export async function downloadDropboxVault(session: DropboxSession, vault: Dropb
   return new File([await response.arrayBuffer()], vault.name, { type: 'application/octet-stream' })
 }
 
+export async function deleteDropboxVault(session: DropboxSession, vault: DropboxVaultFile) {
+  const response = await fetch(`${apiEndpoint}/files/delete_v2`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${session.accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      path: vault.id,
+      parent_rev: vault.rev,
+    }),
+  })
+
+  if (!response.ok) {
+    throw new DropboxApiError(response.status === 401
+      ? 'The Dropbox connection expired. Connect again before deleting this vault.'
+      : response.status === 409
+        ? `${vault.name} changed or no longer exists in Dropbox. Refresh the library before trying again.`
+        : `${vault.name} could not be deleted from Dropbox. Your vault was not changed.`)
+  }
+}
+
+export async function uploadDropboxVaultRevision(session: DropboxSession, vault: DropboxVaultFile, file: File) {
+  const response = await fetch(`${contentEndpoint}/files/upload`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${session.accessToken}`,
+      'Content-Type': 'application/octet-stream',
+      'Dropbox-API-Arg': JSON.stringify({
+        path: vault.pathDisplay,
+        mode: { '.tag': 'update', update: vault.rev },
+        autorename: false,
+        strict_conflict: true,
+        mute: false,
+      }),
+    },
+    body: file,
+  })
+
+  if (!response.ok) {
+    const details = await response.text()
+    if (response.status === 409 || details.toLowerCase().includes('conflict')) {
+      throw new DropboxApiError(`${vault.name} changed in Dropbox while it was open. Your edit was not uploaded; refresh and reopen the vault before editing again.`)
+    }
+    throw new DropboxApiError(response.status === 401
+      ? 'The Dropbox connection expired. Connect again before saving this vault.'
+      : `${vault.name} could not be saved to Dropbox. The remote vault was not changed.`)
+  }
+
+  const updated = mapVault(await response.json() as DropboxEntry, true)
+  if (!updated) throw new DropboxApiError('Dropbox saved the encrypted vault but returned incomplete revision information. Refresh and reopen it before editing again.')
+  return updated
+}
+
 export async function uploadNewDropboxVault(session: DropboxSession, file: File) {
   const response = await fetch(`${contentEndpoint}/files/upload`, {
     method: 'POST',

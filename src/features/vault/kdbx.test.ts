@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DOMParser as XmlDomParser, XMLSerializer as XmlSerializer } from '@xmldom/xmldom'
 import { Consts, Credentials, Kdbx, ProtectedValue } from 'kdbxweb'
-import { configureArgon2, createKdbxData, readKdbxSnapshot, VaultOpenError } from './kdbx'
+import { configureArgon2, createKdbxData, loadKdbxDatabase, prepareKdbxEntryDelete, prepareKdbxEntrySave, readKdbxEntryDetails, readKdbxSnapshot, VaultOpenError } from './kdbx'
 
 // kdbxweb uses browser-native XML APIs in production. Supply the current,
 // patched xmldom implementation only when these compatibility tests run in Node.
@@ -77,5 +77,67 @@ describe('readKdbxSnapshot', () => {
     await expect(readKdbxSnapshot(new ArrayBuffer(0), '')).rejects.toMatchObject({
       code: 'EMPTY_PASSWORD',
     } satisfies Partial<VaultOpenError>)
+  })
+
+  it('adds an encrypted entry and reopens it as a standard KDBX vault', async () => {
+    const original = await createKdbxData('Editable Fixture', fixturePassword)
+    const database = await loadKdbxDatabase(original, fixturePassword)
+    const groupId = database.getDefaultGroup().uuid.toString()
+    const prepared = await prepareKdbxEntrySave(database, {
+      groupId,
+      title: 'Meridium Account',
+      username: 'jack@example.test',
+      password: 'new-entry-secret',
+      url: 'https://meridium.app',
+      notes: 'Created in Meridium Keys',
+    }, 'Editable Fixture.kdbx')
+    const reopened = await loadKdbxDatabase(prepared.data, fixturePassword)
+    const summary = await readKdbxSnapshot(prepared.data, fixturePassword, 'Editable Fixture.kdbx')
+    const entry = summary.entries.find((candidate) => candidate.title === 'Meridium Account')
+
+    expect(entry).toBeDefined()
+    expect(readKdbxEntryDetails(reopened, entry!.id)).toMatchObject({
+      username: 'jack@example.test',
+      password: 'new-entry-secret',
+      url: 'https://meridium.app',
+      notes: 'Created in Meridium Keys',
+    })
+    expect(new TextDecoder().decode(prepared.data)).not.toContain('new-entry-secret')
+  })
+
+  it('edits an existing entry while preserving KDBX history', async () => {
+    const original = await createFixture(Consts.KdfId.Argon2id)
+    const database = await loadKdbxDatabase(original, fixturePassword)
+    const snapshot = await readKdbxSnapshot(original, fixturePassword)
+    const existing = snapshot.entries[0]
+    const prepared = await prepareKdbxEntrySave(database, {
+      id: existing.id,
+      groupId: existing.groupId,
+      title: 'Updated Account',
+      username: 'updated@example.test',
+      password: 'updated-secret',
+      url: 'https://updated.example.test',
+      notes: 'Updated safely',
+    }, 'fixture.kdbx')
+    const reopened = await loadKdbxDatabase(prepared.data, fixturePassword)
+    const updated = readKdbxEntryDetails(reopened, existing.id)
+
+    expect(updated).toMatchObject({ title: 'Updated Account', password: 'updated-secret' })
+    const reopenedEntry = [...reopened.getDefaultGroup().allEntries()].find((entry) => entry.uuid.toString() === existing.id)
+    expect(reopenedEntry?.history).toHaveLength(1)
+  })
+
+  it('deletes an entry into the standard KDBX recycle bin', async () => {
+    const original = await createFixture(Consts.KdfId.Argon2id)
+    const database = await loadKdbxDatabase(original, fixturePassword)
+    const originalSnapshot = await readKdbxSnapshot(original, fixturePassword)
+    const existing = originalSnapshot.entries[0]
+    const prepared = await prepareKdbxEntryDelete(database, existing.id, 'fixture.kdbx')
+    const reopened = await readKdbxSnapshot(prepared.data, fixturePassword, 'fixture.kdbx')
+    const deleted = reopened.entries.find((entry) => entry.id === existing.id)
+
+    expect(deleted).toMatchObject({ isDeleted: true })
+    expect(reopened.entries.filter((entry) => !entry.isDeleted)).toHaveLength(0)
+    expect(reopened.groups.some((group) => group.isRecycleBin)).toBe(true)
   })
 })

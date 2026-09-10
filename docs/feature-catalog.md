@@ -23,6 +23,9 @@ future possibilities.
 - Browse groups, entry names, usernames, and URLs without exposing protected passwords.
 - Mask password presence and explicitly relock the vault.
 - Keep decryption and key derivation in a dedicated worker.
+- Remove a Dropbox vault without unlocking it, after a named confirmation.
+- Add and edit Login-compatible entries in unlocked Dropbox vaults.
+- Delete entries into the standard KDBX Recycle Bin.
 
 **Proposed:**
 
@@ -33,7 +36,6 @@ future possibilities.
   choice. Do not require or rewrite that KDBX icon merely to decorate the rail.
 - Show locked, unlocked, syncing, offline, conflicted, and error states on the
   vault icon using both text/shape and color.
-- Require explicit confirmation before removing a vault.
 - Distinguish removing a vault from this device, disconnecting it from the app,
   and deleting its remote file.
 - Support automatic lock after inactivity, browser backgrounding, device sleep,
@@ -50,6 +52,8 @@ future possibilities.
 
 - Browse groups and entries in the currently unlocked vault.
 - Inspect safe Login-compatible metadata in a read-only detail pane.
+- Create and edit Login-compatible title, group, username, password, website,
+  and notes fields in an unlocked Dropbox vault.
 - Keyword search is the next slice and is not implemented yet.
 
 **Proposed:**
@@ -114,6 +118,8 @@ vault file format without losing data in third-party applications.
 - Connect to the scoped Dropbox App Folder using OAuth code flow with PKCE.
 - Discover and download standard KDBX files.
 - Upload newly created KDBX files with no-overwrite conflict handling.
+- Upload edited encrypted KDBX bytes only over the expected Dropbox revision.
+- Delete a Dropbox vault only at the revision shown in the library.
 
 **Proposed:**
 

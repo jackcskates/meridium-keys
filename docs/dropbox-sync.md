@@ -30,8 +30,13 @@ Music credentials, Swift-specific code, or media-library behavior.
   The client accepts that shape and, if required fields are unexpectedly absent,
   refreshes the App Folder once to reconcile the file that Dropbox already saved.
 - Current scopes are `account_info.read`, `files.metadata.read`,
-  `files.content.read`, and `files.content.write`. Write is currently used only
-  for new-file creation; updates remain blocked until revision-safe save exists.
+  `files.content.read`, and `files.content.write`. Content write is used for new
+  vault creation, revision-safe encrypted entry updates, and confirmed vault
+  deletion.
+- Entry saves use Dropbox update mode with the revision that was opened. A newer
+  remote revision stops the upload instead of being overwritten.
+- Vault deletion names the vault, requires confirmation, does not require the
+  KDBX master password, and sends the listed revision as a delete precondition.
 
 **Next:** request offline access only after the per-device App Lock can encrypt a
 refresh token at rest. A plaintext refresh token must never be persisted.
@@ -80,7 +85,8 @@ persistent search index of decrypted values.
 5. Unlock only after the user selects a vault and provides its credential.
 6. On save, serialize and encrypt in the crypto layer first.
 7. Write encrypted bytes locally as a pending revision.
-8. Upload using the last known Dropbox revision as a precondition.
+8. Upload using the last known Dropbox revision as a precondition. The worker
+   keeps the change provisional until Dropbox confirms the encrypted upload.
 9. Mark the local copy clean only after Dropbox confirms the new revision.
 
 ## Conflict policy

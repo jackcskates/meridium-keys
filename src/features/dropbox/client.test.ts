@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { downloadDropboxVault, listDropboxVaults, loadDropboxAccount, uploadNewDropboxVault } from './client'
+import { deleteDropboxVault, downloadDropboxVault, listDropboxVaults, loadDropboxAccount, uploadDropboxVaultRevision, uploadNewDropboxVault } from './client'
 import type { DropboxSession, DropboxVaultFile } from './types'
 
 const session: DropboxSession = {
@@ -64,6 +64,41 @@ describe('Dropbox client', () => {
     expect(new Uint8Array(await file.arrayBuffer())).toEqual(bytes)
   })
 
+  it('deletes the exact Dropbox revision without requiring the vault password', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      metadata: { '.tag': 'file', id: 'id:vault', name: 'Personal.kdbx' },
+    }), { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+    const vault: DropboxVaultFile = {
+      id: 'id:vault',
+      name: 'Personal.kdbx',
+      pathDisplay: '/Personal.kdbx',
+      rev: 'expected-rev',
+      size: 1234,
+      serverModified: '2026-09-09T00:00:00Z',
+    }
+
+    await deleteDropboxVault(session, vault)
+
+    const options = fetchMock.mock.calls[0][1] as RequestInit
+    expect(String(fetchMock.mock.calls[0][0])).toContain('files/delete_v2')
+    expect(JSON.parse(String(options.body))).toEqual({ path: 'id:vault', parent_rev: 'expected-rev' })
+  })
+
+  it('stops deletion when the Dropbox revision changed', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('path/conflict/file', { status: 409 })))
+    const vault: DropboxVaultFile = {
+      id: 'id:vault',
+      name: 'Personal.kdbx',
+      pathDisplay: '/Personal.kdbx',
+      rev: 'old-rev',
+      size: 1234,
+      serverModified: '2026-09-09T00:00:00Z',
+    }
+
+    await expect(deleteDropboxVault(session, vault)).rejects.toThrow('changed or no longer exists')
+  })
+
   it('maps an expired Dropbox token to a reconnect message', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('', { status: 401 })))
 
@@ -121,5 +156,51 @@ describe('Dropbox client', () => {
     const file = new File([new Uint8Array([1])], 'Personal.kdbx')
 
     await expect(uploadNewDropboxVault(session, file)).rejects.toThrow('already exists')
+  })
+
+  it('uploads an edited vault only over its expected Dropbox revision', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      id: 'id:vault',
+      name: 'Personal.kdbx',
+      path_display: '/Personal.kdbx',
+      rev: 'new-rev',
+      size: 1400,
+      server_modified: '2026-09-10T00:00:00Z',
+    }), { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+    const vault: DropboxVaultFile = {
+      id: 'id:vault',
+      name: 'Personal.kdbx',
+      pathDisplay: '/Personal.kdbx',
+      rev: 'old-rev',
+      size: 1234,
+      serverModified: '2026-09-09T00:00:00Z',
+    }
+    const file = new File([new Uint8Array([1, 2, 3])], vault.name)
+
+    await expect(uploadDropboxVaultRevision(session, vault, file)).resolves.toMatchObject({ rev: 'new-rev' })
+    const options = fetchMock.mock.calls[0][1] as RequestInit
+    const headers = options.headers as Record<string, string>
+    expect(JSON.parse(headers['Dropbox-API-Arg'])).toMatchObject({
+      path: '/Personal.kdbx',
+      mode: { '.tag': 'update', update: 'old-rev' },
+      autorename: false,
+      strict_conflict: true,
+    })
+  })
+
+  it('stops an edited-vault upload when Dropbox has a newer revision', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('path/conflict/file', { status: 409 })))
+    const vault: DropboxVaultFile = {
+      id: 'id:vault',
+      name: 'Personal.kdbx',
+      pathDisplay: '/Personal.kdbx',
+      rev: 'old-rev',
+      size: 1234,
+      serverModified: '2026-09-09T00:00:00Z',
+    }
+
+    await expect(uploadDropboxVaultRevision(session, vault, new File([new Uint8Array([1])], vault.name)))
+      .rejects.toThrow('changed in Dropbox while it was open')
   })
 })

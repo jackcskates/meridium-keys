@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { downloadDropboxVault, listDropboxVaults, loadDropboxAccount, uploadNewDropboxVault } from './client'
+import { deleteDropboxVault, downloadDropboxVault, listDropboxVaults, loadDropboxAccount, uploadDropboxVaultRevision, uploadNewDropboxVault } from './client'
 import { beginDropboxAuthorization, completeDropboxAuthorization, DropboxAuthError } from './oauth'
 import type { DropboxConnectionStatus, DropboxSession, DropboxVaultFile } from './types'
 
@@ -83,6 +83,24 @@ export function useDropbox() {
     }
   }
 
+  async function remove(vault: DropboxVaultFile) {
+    if (!session) throw new Error('Connect Dropbox before deleting this vault.')
+    try {
+      await deleteDropboxVault(session, vault)
+      await loadLibrary(session)
+    } catch (deleteError) {
+      await loadLibrary(session)
+      throw deleteError
+    }
+  }
+
+  async function save(vault: DropboxVaultFile, file: File) {
+    if (!session) throw new Error('Connect Dropbox before saving this vault.')
+    const updated = await uploadDropboxVaultRevision(session, vault, file)
+    await loadLibrary(session)
+    return updated
+  }
+
   function disconnect() {
     setSession(null)
     setVaults([])
@@ -100,6 +118,8 @@ export function useDropbox() {
     disconnect,
     download,
     upload,
+    remove,
+    save,
     refresh,
   }
 }
