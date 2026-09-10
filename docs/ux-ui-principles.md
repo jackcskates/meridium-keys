@@ -62,6 +62,10 @@ for careful credential work, with lock and sync status always explicit.
 - Storage section labels are text-only. The sidebar footer owns connection
   status, Sign out, and the avatar/profile placeholder; connected and ready
   states use the semantic green status dot with a text label.
+- The PWA fills its available application viewport without an inset desktop
+  window frame. Vault header actions use the standard 44px control height in a
+  single secondary/primary row; the 52px prominent action is reserved for
+  focused flows rather than workspace toolbars.
 - Search is prominent after unlock.
 - Item results and item details use the remaining space responsively.
 

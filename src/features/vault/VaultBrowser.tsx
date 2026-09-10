@@ -147,14 +147,14 @@ export function VaultBrowser({ vault, canEdit, onDeleteEntry, onLoadEntry, onLoc
   return (
     <div className="vault-browser">
       <header className="vault-browser-header">
-        <div>
+        <div className="vault-browser-title">
           <p className="eyebrow">KDBX {vault.version}</p>
           <h1>{vault.databaseName}</h1>
           <p>{activeEntries.length} {activeEntries.length === 1 ? 'entry' : 'entries'} · decrypted in memory</p>
         </div>
         <div className="vault-browser-actions">
-          <button className="button button-primary" disabled={!canEdit || isSaving || isDeleting} onClick={beginCreate} title={canEdit ? 'Add entry' : 'Dropbox vaults can be edited; local files remain read only.'} type="button">Add entry</button>
           <button className="button button-secondary" onClick={onLock} type="button">Lock vault</button>
+          <button className="button button-primary" disabled={!canEdit || isSaving || isDeleting} onClick={beginCreate} title={canEdit ? 'Add entry' : 'Dropbox vaults can be edited; local files remain read only.'} type="button">Add entry</button>
         </div>
       </header>
 
