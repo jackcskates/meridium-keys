@@ -172,6 +172,18 @@ they never existed; mark them superseded and link to the replacement.
 - **Reason:** Type-first forms reduce irrelevant fields without introducing a
   proprietary vault format or hiding data from compatible KeePass applications.
 
+### D-026 - Entry drag-and-drop
+
+- **Status:** Accepted
+- **Decision:** Let an unlocked Dropbox entry move between standard KDBX groups
+  or the root “No folder” location using a dedicated mouse/touch drag handle.
+  Provide a keyboard-accessible Move entry dialog for the same action, and never
+  accept the Recycle Bin as a move destination.
+- **Reason:** Direct manipulation makes folder organization fast without merging
+  row selection and drag into one ambiguous gesture. The worker performs the
+  KDBX move and the existing expected-revision upload protects the remote file
+  from silent concurrent overwrites.
+
 ## Open
 
 ### D-005 - Standard KDBX compatibility

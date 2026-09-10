@@ -2,7 +2,7 @@
 
 import { DOMParser as XmlDomParser, XMLSerializer as XmlSerializer } from '@xmldom/xmldom'
 import type { Kdbx } from 'kdbxweb'
-import { createKdbxData, loadKdbxDatabase, mapKdbxSnapshot, prepareKdbxEntryDelete, prepareKdbxEntrySave, prepareKdbxGroupDelete, prepareKdbxGroupSave, readKdbxEntryDetails, VaultOpenError } from './kdbx'
+import { createKdbxData, loadKdbxDatabase, mapKdbxSnapshot, prepareKdbxEntryDelete, prepareKdbxEntryMove, prepareKdbxEntrySave, prepareKdbxGroupDelete, prepareKdbxGroupSave, readKdbxEntryDetails, VaultOpenError } from './kdbx'
 import type { VaultWorkerRequest, VaultWorkerResponse } from './types'
 
 const scope = self as DedicatedWorkerGlobalScope
@@ -79,6 +79,22 @@ scope.onmessage = async (event: MessageEvent<VaultWorkerRequest>) => {
         type: 'change-prepared',
         changeId,
         data: prepared.data,
+        requestId: event.data.requestId,
+        vault: prepared.vault,
+      } satisfies VaultWorkerResponse, [prepared.data])
+      return
+    }
+
+    if (event.data.type === 'prepare-entry-move') {
+      if (pendingChange) throw new VaultOpenError('WORKER_FAILURE', 'Finish the current save before moving another entry.')
+      const prepared = await prepareKdbxEntryMove(database, event.data.entryId, event.data.groupId, fileName)
+      const changeId = crypto.randomUUID()
+      pendingChange = { id: changeId, database: prepared.database }
+      scope.postMessage({
+        type: 'change-prepared',
+        changeId,
+        data: prepared.data,
+        entryId: prepared.entryId,
         requestId: event.data.requestId,
         vault: prepared.vault,
       } satisfies VaultWorkerResponse, [prepared.data])

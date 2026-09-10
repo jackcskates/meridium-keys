@@ -79,6 +79,12 @@ export class UnlockedVaultSession {
     return { changeId: message.changeId, data: message.data, vault: message.vault }
   }
 
+  async prepareEntryMove(entryId: string, groupId: string): Promise<PreparedVaultChange> {
+    const message = await this.request((requestId) => ({ type: 'prepare-entry-move', entryId, groupId, requestId }))
+    if (message.type !== 'change-prepared') throw new VaultOpenError('WORKER_FAILURE', 'The secure vault worker returned an unexpected move response.')
+    return { changeId: message.changeId, data: message.data, entryId: message.entryId, vault: message.vault }
+  }
+
   async prepareGroupSave(group: VaultGroupDraft): Promise<PreparedVaultChange> {
     const message = await this.request((requestId) => ({ type: 'prepare-group-save', group, requestId }))
     if (message.type !== 'change-prepared') throw new VaultOpenError('WORKER_FAILURE', 'The secure vault worker returned an unexpected folder response.')

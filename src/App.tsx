@@ -485,6 +485,14 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
     return persistPreparedVaultChange(await session.prepareEntryDelete(entryId))
   }
 
+  async function moveVaultEntry(entryId: string, groupId: string) {
+    const session = vaultSessionRef.current
+    if (!session) throw new Error('The vault is locked. Open it again before moving an entry.')
+    const prepared = await session.prepareEntryMove(entryId, groupId)
+    const committedVault = await persistPreparedVaultChange(prepared)
+    return { entryId: prepared.entryId || entryId, vault: committedVault }
+  }
+
   async function saveVaultGroup(group: VaultGroupDraft) {
     const session = vaultSessionRef.current
     if (!session) throw new Error('The vault is locked. Open it again before saving a folder.')
@@ -789,6 +797,7 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
                 return session ? session.getEntry(entryId) : Promise.reject(new Error('The vault is locked. Open it again before editing an entry.'))
               }}
               onLock={lockVault}
+              onMoveEntry={moveVaultEntry}
               onSaveGroup={saveVaultGroup}
               onSaveEntry={saveVaultEntry}
               vault={vaultSnapshot}

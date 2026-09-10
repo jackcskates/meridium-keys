@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { createEmptyEntryDraft, entryTypeDefinitions, entryTypeLabel, getEntryTypeDefinition, type EntryFieldDefinition } from './entryTypes'
 import type { VaultEntryDetails, VaultEntryDraft, VaultEntrySummary, VaultGroupDraft, VaultGroupSummary, VaultSnapshot } from './types'
 
@@ -9,9 +9,12 @@ type VaultBrowserProps = {
   onDeleteGroup: (groupId: string) => Promise<VaultSnapshot>
   onLoadEntry: (entryId: string) => Promise<VaultEntryDetails>
   onLock: () => void
+  onMoveEntry: (entryId: string, groupId: string) => Promise<{ entryId: string; vault: VaultSnapshot }>
   onSaveEntry: (entry: VaultEntryDraft) => Promise<{ entryId: string; vault: VaultSnapshot }>
   onSaveGroup: (group: VaultGroupDraft) => Promise<{ groupId: string; vault: VaultSnapshot }>
 }
+
+const entryDragMime = 'application/x-meridium-vault-entry'
 
 function DialogShell({ labelledBy, describedBy, children, onCancel, locked = false }: {
   labelledBy: string
@@ -89,7 +92,28 @@ function EntryField({ field, value, disabled, visible, onChange, onToggle }: {
   return <label className="field"><span>{field.label}</span>{isTextarea ? <div className={`secret-field ${isSecret && !visible ? 'is-masked' : ''}`}><textarea disabled={disabled} onChange={(event) => onChange(event.target.value)} placeholder={field.placeholder} required={field.required} rows={field.kind === 'secret-textarea' ? 3 : 4} value={value} />{isSecret && <button aria-label={`${visible ? 'Hide' : 'Show'} ${field.label.toLowerCase()}`} disabled={disabled} onClick={onToggle} type="button">{visible ? 'Hide' : 'Show'}</button>}</div> : isSecret ? <div className="secret-input"><input autoComplete="new-password" disabled={disabled} onChange={(event) => onChange(event.target.value)} required={field.required} type={inputType} value={value} /><button aria-label={`${visible ? 'Hide' : 'Show'} ${field.label.toLowerCase()}`} disabled={disabled} onClick={onToggle} type="button">{visible ? 'Hide' : 'Show'}</button></div> : <input autoComplete="off" disabled={disabled} inputMode={field.kind === 'email' ? 'email' : field.kind === 'url' ? 'url' : undefined} onChange={(event) => onChange(event.target.value)} placeholder={field.placeholder} required={field.required} type={inputType} value={value} />}</label>
 }
 
-export function VaultBrowser({ vault, canEdit, onDeleteEntry, onDeleteGroup, onLoadEntry, onLock, onSaveEntry, onSaveGroup }: VaultBrowserProps) {
+function DragHandle() {
+  return <svg aria-hidden="true" fill="currentColor" height="18" viewBox="0 0 18 18" width="18"><circle cx="6" cy="4" r="1.2" /><circle cx="12" cy="4" r="1.2" /><circle cx="6" cy="9" r="1.2" /><circle cx="12" cy="9" r="1.2" /><circle cx="6" cy="14" r="1.2" /><circle cx="12" cy="14" r="1.2" /></svg>
+}
+
+function MoveEntryDialog({ entry, vault, isMoving, error, onCancel, onMove }: {
+  entry: VaultEntrySummary
+  vault: VaultSnapshot
+  isMoving: boolean
+  error: string
+  onCancel: () => void
+  onMove: (groupId: string) => void
+}) {
+  const [groupId, setGroupId] = useState(entry.groupId)
+  return <DialogShell labelledBy="move-entry-title" locked={isMoving} onCancel={onCancel}><form className="confirm-dialog-card" onSubmit={(event) => { event.preventDefault(); onMove(groupId) }}>
+    <div className="confirm-dialog-copy"><p className="eyebrow">Move entry</p><h2 id="move-entry-title">Move {entry.title}</h2><p>Choose a destination inside this vault.</p></div>
+    <label className="field"><span>Folder</span><select autoFocus disabled={isMoving} onChange={(event) => setGroupId(event.target.value)} value={groupId}><option value={vault.rootGroupId}>No folder</option>{vault.groups.filter((group) => !group.isRecycleBin).map((group) => <option key={group.id} value={group.id}>{group.path}</option>)}</select></label>
+    {error && <p className="unlock-error" role="alert">{error}</p>}
+    <div className="confirm-dialog-actions"><button className="button button-secondary" disabled={isMoving} onClick={onCancel} type="button">Cancel</button><button className="button button-primary" disabled={isMoving || groupId === entry.groupId} type="submit">{isMoving ? 'Moving…' : 'Move entry'}</button></div>
+  </form></DialogShell>
+}
+
+export function VaultBrowser({ vault, canEdit, onDeleteEntry, onDeleteGroup, onLoadEntry, onLock, onMoveEntry, onSaveEntry, onSaveGroup }: VaultBrowserProps) {
   const [selectedGroupId, setSelectedGroupId] = useState('all')
   const activeEntries = useMemo(() => vault.entries.filter((entry) => !entry.isDeleted), [vault.entries])
   const selectedGroup = vault.groups.find((group) => group.id === selectedGroupId)
@@ -116,6 +140,14 @@ export function VaultBrowser({ vault, canEdit, onDeleteEntry, onDeleteGroup, onL
   const [groupToDelete, setGroupToDelete] = useState<VaultGroupSummary | null>(null)
   const [isSavingGroup, setIsSavingGroup] = useState(false)
   const [groupError, setGroupError] = useState('')
+  const [draggedEntryId, setDraggedEntryId] = useState('')
+  const [dropTargetGroupId, setDropTargetGroupId] = useState('')
+  const [entryToMove, setEntryToMove] = useState<VaultEntrySummary | null>(null)
+  const [isMovingEntry, setIsMovingEntry] = useState(false)
+  const [moveError, setMoveError] = useState('')
+  const [moveStatus, setMoveStatus] = useState('')
+  const nativeDragEntryIdRef = useRef('')
+  const pointerDragRef = useRef<{ pointerId: number; entryId: string; targetGroupId: string } | null>(null)
 
   function resetEntryEditor() {
     setDraft(null)
@@ -223,6 +255,107 @@ export function VaultBrowser({ vault, canEdit, onDeleteEntry, onDeleteGroup, onL
     }
   }
 
+  function folderLabel(groupId: string) {
+    return groupId === vault.rootGroupId ? 'No folder' : vault.groups.find((group) => group.id === groupId)?.name || 'folder'
+  }
+
+  function canDropEntry(entryId: string, groupId: string) {
+    if (!canEdit || isMovingEntry) return false
+    const entry = vault.entries.find((candidate) => candidate.id === entryId)
+    const group = groupId === vault.rootGroupId ? null : vault.groups.find((candidate) => candidate.id === groupId)
+    return Boolean(entry && !entry.isDeleted && entry.groupId !== groupId && (groupId === vault.rootGroupId || (group && !group.isRecycleBin)))
+  }
+
+  function clearDragState() {
+    nativeDragEntryIdRef.current = ''
+    pointerDragRef.current = null
+    setDraggedEntryId('')
+    setDropTargetGroupId('')
+  }
+
+  async function moveEntry(entryId: string, groupId: string) {
+    if (!canDropEntry(entryId, groupId)) {
+      clearDragState()
+      return
+    }
+    const entry = vault.entries.find((candidate) => candidate.id === entryId)
+    if (!entry) return
+    setIsMovingEntry(true)
+    setMoveError('')
+    setMoveStatus(`Moving ${entry.title} to ${folderLabel(groupId)}…`)
+    clearDragState()
+    try {
+      const moved = await onMoveEntry(entryId, groupId)
+      setSelectedGroupId(groupId)
+      setSelectedEntryId(moved.entryId)
+      setEntryToMove(null)
+      resetEntryEditor()
+      setMoveStatus(`${entry.title} moved to ${folderLabel(groupId)}.`)
+    } catch (error) {
+      setMoveError(error instanceof Error ? error.message : 'The entry could not be moved safely.')
+      setMoveStatus('')
+    } finally {
+      setIsMovingEntry(false)
+    }
+  }
+
+  function beginNativeDrag(event: ReactDragEvent<HTMLButtonElement>, entry: VaultEntrySummary) {
+    if (!canEdit || isMovingEntry || entry.isDeleted) {
+      event.preventDefault()
+      return
+    }
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData(entryDragMime, entry.id)
+    event.dataTransfer.setData('text/plain', entry.id)
+    nativeDragEntryIdRef.current = entry.id
+    setDraggedEntryId(entry.id)
+    setMoveStatus(`Moving ${entry.title}. Drop it on a folder.`)
+  }
+
+  function updatePointerTarget(clientX: number, clientY: number, entryId: string) {
+    const element = document.elementFromPoint(clientX, clientY)?.closest<HTMLElement>('[data-folder-id]')
+    const groupId = element?.dataset.folderId || ''
+    const targetGroupId = canDropEntry(entryId, groupId) ? groupId : ''
+    if (pointerDragRef.current) pointerDragRef.current.targetGroupId = targetGroupId
+    setDropTargetGroupId(targetGroupId)
+  }
+
+  function beginPointerDrag(event: ReactPointerEvent<HTMLButtonElement>, entry: VaultEntrySummary) {
+    if (!canEdit || isMovingEntry || entry.isDeleted || (event.pointerType === 'mouse' && event.button !== 0)) return
+    event.preventDefault()
+    event.currentTarget.setPointerCapture?.(event.pointerId)
+    pointerDragRef.current = { pointerId: event.pointerId, entryId: entry.id, targetGroupId: '' }
+    setDraggedEntryId(entry.id)
+    setMoveStatus(`Moving ${entry.title}. Drop it on a folder.`)
+    updatePointerTarget(event.clientX, event.clientY, entry.id)
+  }
+
+  function continuePointerDrag(event: ReactPointerEvent<HTMLButtonElement>) {
+    const drag = pointerDragRef.current
+    if (!drag || drag.pointerId !== event.pointerId) return
+    event.preventDefault()
+    updatePointerTarget(event.clientX, event.clientY, drag.entryId)
+  }
+
+  function finishPointerDrag(event: ReactPointerEvent<HTMLButtonElement>) {
+    const drag = pointerDragRef.current
+    if (!drag || drag.pointerId !== event.pointerId) return
+    event.preventDefault()
+    const { entryId, targetGroupId } = drag
+    clearDragState()
+    if (targetGroupId) void moveEntry(entryId, targetGroupId)
+    else setMoveStatus('Move canceled. Drop entries on No folder or another folder.')
+  }
+
+  function finishNativeDrop(event: ReactDragEvent<HTMLButtonElement>, groupId: string) {
+    event.preventDefault()
+    const entryId = event.dataTransfer.getData(entryDragMime) || nativeDragEntryIdRef.current || draggedEntryId
+    const canMove = canDropEntry(entryId, groupId)
+    clearDragState()
+    if (canMove) void moveEntry(entryId, groupId)
+    else setMoveStatus('Move canceled. Choose No folder or a different folder outside the Recycle Bin.')
+  }
+
   const definition = draft ? getEntryTypeDefinition(draft.type) : null
 
   return <div className="vault-browser">
@@ -232,11 +365,55 @@ export function VaultBrowser({ vault, canEdit, onDeleteEntry, onDeleteGroup, onL
       <aside className="group-list" aria-label="Vault folders">
         <div className="panel-heading"><h2>Folders</h2>{canEdit && <button aria-label="Create folder" className="panel-action" onClick={() => { setGroupError(''); setGroupDialog('new') }} type="button">+</button>}</div>
         <button className={selectedGroupId === 'all' ? 'is-selected' : ''} onClick={() => selectGroup('all')} type="button"><span>All entries</span><small>{activeEntries.length}</small></button>
-        <button className={selectedGroupId === vault.rootGroupId ? 'is-selected' : ''} onClick={() => selectGroup(vault.rootGroupId)} type="button"><span>No folder</span><small>{rootEntryCount}</small></button>
-        {vault.groups.map((group) => <button className={selectedGroupId === group.id ? 'is-selected' : ''} key={group.id} onClick={() => selectGroup(group.id)} style={{ paddingInlineStart: `${12 + group.depth * 12}px` }} title={group.path} type="button"><span>{group.name}</span><small>{group.entryCount}</small></button>)}
+        <button
+          className={`${selectedGroupId === vault.rootGroupId ? 'is-selected' : ''} ${dropTargetGroupId === vault.rootGroupId ? 'is-drop-target' : ''}`}
+          data-folder-id={vault.rootGroupId}
+          onClick={() => selectGroup(vault.rootGroupId)}
+          onDragOver={(event) => { const entryId = nativeDragEntryIdRef.current || draggedEntryId; if (canDropEntry(entryId, vault.rootGroupId)) { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; setDropTargetGroupId(vault.rootGroupId) } }}
+          onDrop={(event) => finishNativeDrop(event, vault.rootGroupId)}
+          type="button"
+        ><span>No folder</span><small>{rootEntryCount}</small></button>
+        {vault.groups.map((group) => <button
+          className={`${selectedGroupId === group.id ? 'is-selected' : ''} ${dropTargetGroupId === group.id ? 'is-drop-target' : ''}`}
+          data-folder-id={group.isRecycleBin ? undefined : group.id}
+          key={group.id}
+          onClick={() => selectGroup(group.id)}
+          onDragOver={(event) => { const entryId = nativeDragEntryIdRef.current || draggedEntryId; if (canDropEntry(entryId, group.id)) { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; setDropTargetGroupId(group.id) } }}
+          onDrop={(event) => finishNativeDrop(event, group.id)}
+          style={{ paddingInlineStart: `${12 + group.depth * 12}px` }}
+          title={group.path}
+          type="button"
+        ><span>{group.name}</span><small>{group.entryCount}</small></button>)}
         {canEdit && selectedGroup && !selectedGroup.isRecycleBin && <div className="group-actions"><button onClick={() => { setGroupError(''); setGroupDialog(selectedGroup) }} type="button">Rename</button><button className="is-danger" onClick={() => { setGroupError(''); setGroupToDelete(selectedGroup) }} type="button">Delete</button></div>}
       </aside>
-      <section className="entry-list" aria-label="Vault entries"><h2>Entries</h2>{visibleEntries.length ? visibleEntries.map((entry) => <button className={selectedEntryId === entry.id ? 'is-selected' : ''} key={entry.id} onClick={() => { setSelectedEntryId(entry.id); resetEntryEditor() }} type="button"><span className="entry-glyph">{getEntryTypeDefinition(entry.type).glyph}</span><span><strong>{entry.title}</strong><small>{entry.subtitle}</small></span></button>) : <p className="vault-empty-state">No entries here.</p>}</section>
+      <section className="entry-list" aria-label="Vault entries">
+        <h2>Entries</h2>
+        {canEdit && activeEntries.length > 0 && <p aria-live="polite" className="entry-move-hint">{moveStatus || 'Drag an entry onto a folder to move it.'}</p>}
+        {visibleEntries.length ? visibleEntries.map((entry) => <div
+          className={`entry-row ${selectedEntryId === entry.id ? 'is-selected' : ''} ${draggedEntryId === entry.id ? 'is-dragging' : ''}`}
+          key={entry.id}
+        >
+          <button
+            className="entry-row-open"
+            draggable={canEdit && !entry.isDeleted && !isMovingEntry}
+            onClick={() => { setSelectedEntryId(entry.id); resetEntryEditor() }}
+            onDragEnd={() => { const wasActive = Boolean(nativeDragEntryIdRef.current); clearDragState(); if (wasActive && !isMovingEntry) setMoveStatus('Move canceled. Drop entries on No folder or another folder.') }}
+            onDragStart={(event) => beginNativeDrag(event, entry)}
+            type="button"
+          ><span className="entry-glyph">{getEntryTypeDefinition(entry.type).glyph}</span><span><strong>{entry.title}</strong><small>{entry.subtitle}</small></span></button>
+          {canEdit && !entry.isDeleted && <button
+            aria-label={`Drag ${entry.title} to a folder`}
+            className="entry-drag-handle"
+            disabled={isMovingEntry}
+            onPointerCancel={finishPointerDrag}
+            onPointerDown={(event) => beginPointerDrag(event, entry)}
+            onPointerMove={continuePointerDrag}
+            onPointerUp={finishPointerDrag}
+            title={`Drag ${entry.title} to a folder`}
+            type="button"
+          ><DragHandle /></button>}
+        </div>) : <p className="vault-empty-state">No entries here.</p>}
+      </section>
       <section className="entry-detail" aria-label="Selected entry">
         {choosingType ? <div className="entry-type-picker"><div className="entry-editor-heading"><div><p className="eyebrow">New entry</p><h2>Choose a type</h2></div></div><p className="type-picker-copy">The type controls which fields appear in the entry.</p><div className="entry-type-grid">{entryTypeDefinitions.map((type) => <button key={type.id} onClick={() => chooseType(type.id)} type="button"><span className="entry-glyph">{type.glyph}</span><span><strong>{type.label}</strong><small>{type.description}</small></span></button>)}</div><button className="text-button" onClick={resetEntryEditor} type="button">Cancel</button></div> : draft && definition ? <form className="entry-editor" onSubmit={saveEntry}>
           <div className="entry-editor-heading"><div><p className="eyebrow">{draft.id ? `Edit ${definition.label}` : `New ${definition.label}`}</p><h2>{draft.id ? draft.title || `Untitled ${definition.label}` : `Add ${definition.label}`}</h2></div>{!draft.id && <button className="text-button" onClick={() => { setDraft(null); setChoosingType(true) }} type="button">Change type</button>}</div>
@@ -244,10 +421,11 @@ export function VaultBrowser({ vault, canEdit, onDeleteEntry, onDeleteGroup, onL
           <label className="field"><span>Folder</span><select disabled={isSaving} onChange={(event) => setDraft({ ...draft, groupId: event.target.value })} value={draft.groupId}><option value={vault.rootGroupId}>No folder</option>{vault.groups.filter((group) => !group.isRecycleBin).map((group) => <option key={group.id} value={group.id}>{group.path}</option>)}</select></label>
           {definition.fields.map((field) => <EntryField disabled={isSaving} field={field} key={field.key} onChange={(value) => setDraft({ ...draft, fields: { ...draft.fields, [field.key]: value } })} onToggle={() => setVisibleSecrets((current) => { const next = new Set(current); if (next.has(field.key)) next.delete(field.key); else next.add(field.key); return next })} value={draft.fields[field.key] || ''} visible={visibleSecrets.has(field.key)} />)}
           {saveError && <p className="unlock-error" role="alert">{saveError}</p>}<div className="entry-editor-actions"><button className="button button-secondary" disabled={isSaving} onClick={resetEntryEditor} type="button">Cancel</button><button className="button button-primary" disabled={isSaving} type="submit">{isSaving ? 'Encrypting and saving…' : 'Save entry'}</button></div>
-        </form> : selectedEntry ? <><div className="entry-detail-heading"><span className="entry-glyph entry-glyph-large">{getEntryTypeDefinition(selectedEntry.type).glyph}</span><div><p className="eyebrow">{selectedEntry.isDeleted ? 'Recycle Bin' : entryTypeLabel(selectedEntry.type)}</p><h2>{selectedEntry.title}</h2></div></div><dl><div><dt>Type</dt><dd>{entryTypeLabel(selectedEntry.type)}</dd></div><div><dt>Folder</dt><dd>{selectedEntry.groupId === vault.rootGroupId ? 'No folder' : vault.groups.find((group) => group.id === selectedEntry.groupId)?.path || '—'}</dd></div>{selectedEntry.username && <div><dt>Username</dt><dd>{selectedEntry.username}</dd></div>}{selectedEntry.url && <div><dt>Website</dt><dd>{selectedEntry.url}</dd></div>}{selectedEntry.hasPassword && <div><dt>Protected fields</dt><dd className="masked-secret">••••••••••••</dd></div>}</dl>{saveError && <p className="unlock-error" role="alert">{saveError}</p>}{!selectedEntry.isDeleted && canEdit && <div className="entry-detail-actions"><button className="button button-secondary" disabled={isLoadingEntry} onClick={() => void beginEdit(selectedEntry)} type="button">{isLoadingEntry ? 'Preparing…' : 'Edit entry'}</button><button className="text-button text-button-danger" onClick={() => { setDeleteError(''); setEntryToDelete(selectedEntry) }} type="button">Delete entry</button></div>}<p className="read-only-note">Protected values are revealed only inside the editor while this vault is unlocked.</p></> : <p className="vault-empty-state">Choose an entry or add a new one.</p>}
+        </form> : selectedEntry ? <><div className="entry-detail-heading"><span className="entry-glyph entry-glyph-large">{getEntryTypeDefinition(selectedEntry.type).glyph}</span><div><p className="eyebrow">{selectedEntry.isDeleted ? 'Recycle Bin' : entryTypeLabel(selectedEntry.type)}</p><h2>{selectedEntry.title}</h2></div></div><dl><div><dt>Type</dt><dd>{entryTypeLabel(selectedEntry.type)}</dd></div><div><dt>Folder</dt><dd>{selectedEntry.groupId === vault.rootGroupId ? 'No folder' : vault.groups.find((group) => group.id === selectedEntry.groupId)?.path || '—'}</dd></div>{selectedEntry.username && <div><dt>Username</dt><dd>{selectedEntry.username}</dd></div>}{selectedEntry.url && <div><dt>Website</dt><dd>{selectedEntry.url}</dd></div>}{selectedEntry.hasPassword && <div><dt>Protected fields</dt><dd className="masked-secret">••••••••••••</dd></div>}</dl>{saveError && <p className="unlock-error" role="alert">{saveError}</p>}{moveError && <p className="unlock-error" role="alert">{moveError}</p>}{!selectedEntry.isDeleted && canEdit && <div className="entry-detail-actions"><button className="button button-secondary" disabled={isLoadingEntry || isMovingEntry} onClick={() => void beginEdit(selectedEntry)} type="button">{isLoadingEntry ? 'Preparing…' : 'Edit entry'}</button><button className="text-button" disabled={isMovingEntry || (selectedEntry.groupId === vault.rootGroupId && vault.groups.every((group) => group.isRecycleBin))} onClick={() => { setMoveError(''); setEntryToMove(selectedEntry) }} type="button">Move entry</button><button className="text-button text-button-danger" disabled={isMovingEntry} onClick={() => { setDeleteError(''); setEntryToDelete(selectedEntry) }} type="button">Delete entry</button></div>}<p className="read-only-note">Protected values are revealed only inside the editor while this vault is unlocked.</p></> : <p className="vault-empty-state">Choose an entry or add a new one.</p>}
       </section>
     </div>
     {entryToDelete && <DeleteEntryDialog entry={entryToDelete} error={deleteError} isDeleting={isDeleting} onCancel={() => { if (!isDeleting) { setDeleteError(''); setEntryToDelete(null) } }} onDelete={() => void deleteEntry()} />}
+    {entryToMove && <MoveEntryDialog entry={entryToMove} error={moveError} isMoving={isMovingEntry} onCancel={() => { if (!isMovingEntry) { setMoveError(''); setEntryToMove(null) } }} onMove={(groupId) => void moveEntry(entryToMove.id, groupId)} vault={vault} />}
     {groupDialog && <GroupNameDialog error={groupError} group={groupDialog === 'new' ? null : groupDialog} isSaving={isSavingGroup} onCancel={() => { if (!isSavingGroup) { setGroupError(''); setGroupDialog(null) } }} onSave={(group) => void saveGroup(group)} rootGroupId={vault.rootGroupId} />}
     {groupToDelete && <DeleteGroupDialog error={groupError} group={groupToDelete} isDeleting={isSavingGroup} onCancel={() => { if (!isSavingGroup) { setGroupError(''); setGroupToDelete(null) } }} onDelete={() => void deleteGroup()} />}
   </div>

@@ -62,6 +62,11 @@ for careful credential work, with lock and sync status always explicit.
 - The folder navigator represents the KDBX root as “No folder.” It never repeats
   the vault name as an artificial folder. Users can create, rename, and delete
   real KDBX folders, including folders containing entries.
+- Entry rows use a dedicated 44-pixel drag handle so opening an entry and moving
+  it remain distinct actions. Valid folder targets receive a restrained green
+  outline during a drag; Recycle Bin does not advertise itself as a target. The
+  detail pane also offers a labeled Move entry dialog for keyboard use and as a
+  clear fallback on devices where dragging is awkward.
 - Storage section labels are text-only. The sidebar footer owns connection
   status, Sign out, and the avatar/profile placeholder; connected and ready
   states use the semantic green status dot with a text label.

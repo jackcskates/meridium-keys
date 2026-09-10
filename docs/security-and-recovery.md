@@ -61,6 +61,9 @@ encrypts persisted Dropbox authorization and cached KDBX bytes.
 - Protected entry passwords remain inside the worker until the user opens an
   entry editor. The editor holds the active draft in volatile React memory only
   and clears it on save, cancel, lock, or unmount.
+- Moving an entry sends only its opaque KDBX entry and destination group IDs to
+  the worker. The worker changes the standard KDBX parent relationship and
+  re-encrypts the database without exposing protected fields to the React view.
 - Entry changes are encrypted into a provisional KDBX revision in the worker.
   The worker commits that revision only after Dropbox accepts the expected
   remote revision; failed or conflicting uploads discard the provisional model.

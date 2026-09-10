@@ -48,6 +48,9 @@ Last verified: 2026-09-10.
   Each type supplies its own field set; standard fields and protected custom
   fields remain readable in compatible KeePass applications.
 - Delete entries into the standard KDBX Recycle Bin with explicit confirmation.
+- Move entries between real KDBX folders or back to “No folder” by dragging the
+  dedicated handle with a mouse or touch pointer. A Move entry dialog provides
+  the equivalent keyboard-accessible action. Recycle Bin is never a move target.
 - Revision-safe Dropbox updates: an edit is uploaded only over the revision that
   was opened, and the in-memory worker commits it only after Dropbox confirms.
 - Explicit connected, connecting, loading, empty, error, and session-disconnect states.
@@ -105,6 +108,10 @@ Last verified: 2026-09-10.
   to the KDBX Recycle Bin on 2026-09-10. Reloading the PWA restored Dropbox
   automatically. The disposable vault was removed afterward and Development was
   not opened or modified.
+- A second disposable live Dropbox vault verified the drag interaction itself on
+  2026-09-10: a root Note entry was dragged by its handle into another folder,
+  the folder counts and selected-entry metadata updated after the Dropbox save,
+  and the test vault was removed afterward. Development remained untouched.
 
 ## Current dependencies for vault reading
 

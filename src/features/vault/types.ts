@@ -75,6 +75,7 @@ export type VaultWorkerRequest =
   | { type: 'get-entry'; entryId: string; requestId: string }
   | { type: 'prepare-entry-save'; entry: VaultEntryDraft; requestId: string }
   | { type: 'prepare-entry-delete'; entryId: string; requestId: string }
+  | { type: 'prepare-entry-move'; entryId: string; groupId: string; requestId: string }
   | { type: 'prepare-group-save'; group: VaultGroupDraft; requestId: string }
   | { type: 'prepare-group-delete'; groupId: string; requestId: string }
   | { type: 'finish-change'; changeId: string; commit: boolean; requestId: string }

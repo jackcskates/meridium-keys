@@ -229,6 +229,15 @@ function findGroup(database: Kdbx, groupId: string) {
   return undefined
 }
 
+function groupIsInRecycleBin(group: KdbxGroup, recycleBinId: string) {
+  let current: KdbxGroup | undefined = group
+  while (current) {
+    if (current.uuid.toString() === recycleBinId) return true
+    current = current.parentGroup
+  }
+  return false
+}
+
 function entryFieldText(entry: KdbxEntry, name: string) {
   const value = entry.fields.get(name)
   return value instanceof ProtectedValue ? value.getText() : typeof value === 'string' ? value : ''
@@ -370,6 +379,37 @@ export async function prepareKdbxEntryDelete(database: Kdbx, entryId: string, fi
       database: workingDatabase,
       data,
       vault: mapKdbxSnapshot(workingDatabase, fileName),
+    }
+  } catch (error) {
+    throw mapKdbxError(error)
+  }
+}
+
+export async function prepareKdbxEntryMove(database: Kdbx, entryId: string, groupId: string, fileName: string) {
+  try {
+    const clonedData = await database.save()
+    const workingDatabase = await Kdbx.load(clonedData, database.credentials)
+    const entry = findEntry(workingDatabase, entryId)
+    const targetGroup = findGroup(workingDatabase, groupId)
+    const recycleBinId = workingDatabase.meta.recycleBinUuid?.toString() || ''
+    if (!entry?.parentGroup) throw new VaultOpenError('WORKER_FAILURE', 'That entry no longer exists in the open vault.')
+    if (!targetGroup) throw new VaultOpenError('WORKER_FAILURE', 'That destination folder no longer exists in the open vault.')
+    if (groupIsInRecycleBin(entry.parentGroup, recycleBinId)) {
+      throw new VaultOpenError('WORKER_FAILURE', 'Restore Recycle Bin entries before moving them to another folder.')
+    }
+    if (groupIsInRecycleBin(targetGroup, recycleBinId)) {
+      throw new VaultOpenError('WORKER_FAILURE', 'Entries cannot be dragged into the Recycle Bin.')
+    }
+    if (entry.parentGroup.uuid.toString() !== targetGroup.uuid.toString()) {
+      workingDatabase.move(entry, targetGroup)
+      entry.times.update()
+    }
+    const data = await workingDatabase.save()
+    return {
+      database: workingDatabase,
+      data,
+      vault: mapKdbxSnapshot(workingDatabase, fileName),
+      entryId: entry.uuid.toString(),
     }
   } catch (error) {
     throw mapKdbxError(error)

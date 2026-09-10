@@ -1101,7 +1101,7 @@ h1 {
 .panel-action:focus-visible { color: var(--text-primary); background: var(--surface-2); }
 
 .group-list > button,
-.entry-list button {
+.entry-row-open {
   appearance: none;
   width: 100%;
   min-height: 44px;
@@ -1128,7 +1128,15 @@ h1 {
   font-size: 0.7rem;
 }
 
-.entry-list button {
+.entry-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px;
+  align-items: center;
+  border-radius: var(--radius-control);
+  transition: opacity 120ms ease, background 120ms ease;
+}
+
+.entry-row-open {
   padding: 7px 9px;
   display: grid;
   grid-template-columns: 36px minmax(0, 1fr);
@@ -1136,7 +1144,7 @@ h1 {
   gap: 10px;
 }
 
-.entry-list button > span:last-child {
+.entry-row-open > span:last-child {
   min-width: 0;
   display: grid;
   gap: 2px;
@@ -1161,12 +1169,54 @@ h1 {
 
 .group-list > button:hover,
 .group-list > button:focus-visible,
-.entry-list button:hover,
-.entry-list button:focus-visible,
+.entry-row-open:hover,
+.entry-row-open:focus-visible,
 .group-list > button.is-selected,
-.entry-list button.is-selected {
+.entry-row.is-selected {
   color: var(--text-primary);
   background: var(--surface-2);
+}
+
+.group-list > button.is-drop-target {
+  color: var(--text-primary);
+  background: var(--surface-hover);
+  outline: 2px solid var(--brand-meridium);
+  outline-offset: -2px;
+}
+
+.entry-row.is-dragging {
+  opacity: 0.42;
+}
+
+.entry-drag-handle {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  color: var(--text-tertiary);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-control);
+  opacity: 0.55;
+  cursor: grab;
+  touch-action: none;
+}
+
+.entry-row:hover .entry-drag-handle,
+.entry-drag-handle:focus-visible { color: var(--text-primary); background: var(--surface-3); opacity: 1; }
+.entry-drag-handle:active { cursor: grabbing; }
+.entry-drag-handle:disabled { opacity: 0.3; cursor: wait; }
+
+.entry-move-hint {
+  margin: -5px 0 8px;
+  color: var(--text-tertiary);
+  font-size: 0.68rem;
+  line-height: 1.4;
+}
+
+@media (pointer: coarse) {
+  .entry-drag-handle { opacity: 0.9; }
 }
 
 .group-actions {

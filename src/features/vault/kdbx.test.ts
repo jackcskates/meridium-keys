@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DOMParser as XmlDomParser, XMLSerializer as XmlSerializer } from '@xmldom/xmldom'
 import { Consts, Credentials, Kdbx, ProtectedValue } from 'kdbxweb'
-import { configureArgon2, createKdbxData, loadKdbxDatabase, prepareKdbxEntryDelete, prepareKdbxEntrySave, prepareKdbxGroupDelete, prepareKdbxGroupSave, readKdbxEntryDetails, readKdbxSnapshot, VaultOpenError } from './kdbx'
+import { configureArgon2, createKdbxData, loadKdbxDatabase, prepareKdbxEntryDelete, prepareKdbxEntryMove, prepareKdbxEntrySave, prepareKdbxGroupDelete, prepareKdbxGroupSave, readKdbxEntryDetails, readKdbxSnapshot, VaultOpenError } from './kdbx'
 import { createEmptyEntryDraft, entryTypeDefinitions } from './entryTypes'
 
 // kdbxweb uses browser-native XML APIs in production. Supply the current,
@@ -150,6 +150,37 @@ describe('readKdbxSnapshot', () => {
     expect(deleted).toMatchObject({ isDeleted: true })
     expect(reopened.entries.filter((entry) => !entry.isDeleted)).toHaveLength(0)
     expect(reopened.groups.some((group) => group.isRecycleBin)).toBe(true)
+  })
+
+  it('moves an entry between folders without exposing or changing its protected fields', async () => {
+    const original = await createFixture(Consts.KdfId.Argon2id)
+    const database = await loadKdbxDatabase(original, fixturePassword)
+    const originalSnapshot = await readKdbxSnapshot(original, fixturePassword)
+    const existing = originalSnapshot.entries[0]
+    const created = await prepareKdbxGroupSave(database, { parentGroupId: originalSnapshot.rootGroupId, name: 'Archive' }, 'fixture.kdbx')
+    const moved = await prepareKdbxEntryMove(created.database, existing.id, created.groupId, 'fixture.kdbx')
+    const reopened = await loadKdbxDatabase(moved.data, fixturePassword)
+    const movedSummary = moved.vault.entries.find((entry) => entry.id === existing.id)
+
+    expect(movedSummary).toMatchObject({ groupId: created.groupId, title: 'Example Account', isDeleted: false })
+    expect(readKdbxEntryDetails(reopened, existing.id)).toMatchObject({
+      groupId: created.groupId,
+      fields: expect.objectContaining({ password: fixtureSecret }),
+    })
+    expect(new TextDecoder().decode(moved.data)).not.toContain(fixtureSecret)
+  })
+
+  it('rejects an entry move into a folder inside the KDBX recycle bin', async () => {
+    const original = await createFixture(Consts.KdfId.Argon2id)
+    const database = await loadKdbxDatabase(original, fixturePassword)
+    const originalSnapshot = await readKdbxSnapshot(original, fixturePassword)
+    const existing = originalSnapshot.entries[0]
+    const parent = await prepareKdbxGroupSave(database, { parentGroupId: originalSnapshot.rootGroupId, name: 'Archived parent' }, 'fixture.kdbx')
+    const child = await prepareKdbxGroupSave(parent.database, { parentGroupId: parent.groupId, name: 'Archived child' }, 'fixture.kdbx')
+    const recycled = await prepareKdbxGroupDelete(child.database, parent.groupId, 'fixture.kdbx')
+
+    await expect(prepareKdbxEntryMove(recycled.database, existing.id, child.groupId, 'fixture.kdbx'))
+      .rejects.toThrow('Entries cannot be dragged into the Recycle Bin.')
   })
 
   it('creates, renames, and deletes a non-empty standard KDBX folder', async () => {

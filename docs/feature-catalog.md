@@ -29,6 +29,9 @@ future possibilities.
 - Keep entries directly in the vault root through the explicit “No folder” choice.
 - Create and edit all ten confirmed entry types through type-specific forms.
 - Delete entries into the standard KDBX Recycle Bin.
+- Drag entries between real folders or “No folder” with mouse or touch, with a
+  keyboard-accessible Move entry dialog for the same operation. The Recycle Bin
+  is not a valid drop destination.
 
 **Proposed:**
 
