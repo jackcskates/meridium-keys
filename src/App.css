@@ -199,10 +199,13 @@
   position: relative;
   width: 44px;
   height: 44px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
   color: var(--text-secondary);
   background: var(--surface-2);
   border: 1px solid var(--border-default);
-  border-radius: 14px;
+  border-radius: var(--radius-control);
   font-weight: 750;
 }
 
@@ -622,24 +625,28 @@ h1 {
 }
 
 .dropbox-vault-row {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 44px;
-  align-items: stretch;
-  gap: 6px;
+  align-items: center;
+  overflow: hidden;
+  background: var(--surface-1);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-control);
 }
 
 .dropbox-vault-open {
   width: 100%;
-  min-height: 66px;
-  padding: 10px 12px;
+  min-height: 64px;
+  padding: 10px 8px 10px 10px;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
   color: var(--text-secondary);
-  background: var(--surface-1);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-control);
+  background: transparent;
+  border: 0;
+  border-radius: 0;
   font: inherit;
   text-align: left;
   cursor: pointer;
@@ -649,7 +656,6 @@ h1 {
 .dropbox-vault-open:focus-visible {
   color: var(--text-primary);
   background: var(--surface-hover);
-  border-color: var(--border-strong);
 }
 
 .dropbox-vault-open:disabled { opacity: 0.62; cursor: wait; }
@@ -666,11 +672,10 @@ h1 {
 
 .vault-delete-button {
   width: 44px;
-  min-height: 44px;
+  height: 44px;
   padding: 0;
   display: grid;
   place-items: center;
-  align-self: center;
   color: var(--text-tertiary);
   background: transparent;
   border: 0;
