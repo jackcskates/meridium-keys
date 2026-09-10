@@ -1549,6 +1549,50 @@ h1 {
 
 .masked-secret { letter-spacing: 0.16em; }
 
+.protected-detail-row dd {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.protected-copy-button {
+  min-width: 82px;
+  min-height: 40px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  color: var(--text-secondary);
+  background: var(--surface-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.protected-copy-button:hover,
+.protected-copy-button:focus-visible { color: var(--text-primary); background: var(--surface-hover); }
+.protected-copy-button:disabled { cursor: wait; opacity: 0.65; }
+.protected-copy-button.is-copied { color: var(--brand-meridium); }
+
+.copy-status {
+  min-height: 1.1rem;
+  margin: -12px 0 0;
+  color: var(--brand-meridium);
+  font-size: 0.7rem;
+  line-height: 1.4;
+}
+
+.copy-status.is-error { color: var(--danger); }
+
+@media (pointer: coarse) {
+  .protected-copy-button { min-height: 44px; }
+}
+
 .entry-type-picker { display: grid; gap: 16px; }
 .type-picker-copy { margin: 0; color: var(--text-secondary); font-size: 0.8rem; line-height: 1.5; }
 

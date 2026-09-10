@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DOMParser as XmlDomParser, XMLSerializer as XmlSerializer } from '@xmldom/xmldom'
 import { Consts, Credentials, Kdbx, ProtectedValue } from 'kdbxweb'
-import { configureArgon2, createKdbxData, loadKdbxDatabase, prepareKdbxEntryDelete, prepareKdbxEntryMove, prepareKdbxEntrySave, prepareKdbxGroupDelete, prepareKdbxGroupSave, readKdbxEntryDetails, readKdbxSnapshot, VaultOpenError } from './kdbx'
+import { configureArgon2, createKdbxData, loadKdbxDatabase, prepareKdbxEntryDelete, prepareKdbxEntryMove, prepareKdbxEntrySave, prepareKdbxGroupDelete, prepareKdbxGroupSave, readKdbxEntryDetails, readKdbxProtectedField, readKdbxSnapshot, VaultOpenError } from './kdbx'
 import { createEmptyEntryDraft, entryTypeDefinitions } from './entryTypes'
 
 // kdbxweb uses browser-native XML APIs in production. Supply the current,
@@ -147,6 +147,32 @@ describe('readKdbxSnapshot', () => {
     expect(updated).toMatchObject({ title: 'Updated Account', type: 'login', fields: expect.objectContaining({ password: 'updated-secret' }) })
     const reopenedEntry = [...reopened.getDefaultGroup().allEntries()].find((entry) => entry.uuid.toString() === existing.id)
     expect(reopenedEntry?.history).toHaveLength(1)
+  })
+
+  it('decrypts only a requested protected field for direct copy', async () => {
+    const original = await createKdbxData('Protected Copy Fixture', fixturePassword)
+    const database = await loadKdbxDatabase(original, fixturePassword)
+    const groupId = database.getDefaultGroup().uuid.toString()
+    const prepared = await prepareKdbxEntrySave(database, {
+      groupId,
+      type: 'api-key',
+      title: 'Service API',
+      fields: {
+        service: 'Fixture Service',
+        apiKey: 'fixture-api-key',
+        apiSecret: 'fixture-api-secret',
+        endpoint: 'https://api.example.test',
+      },
+    }, 'protected-copy.kdbx')
+    const summary = prepared.vault.entries.find((entry) => entry.id === prepared.entryId)
+
+    expect(summary?.protectedFieldKeys).toEqual(['apiKey', 'apiSecret'])
+    expect(JSON.stringify(prepared.vault)).not.toContain('fixture-api-key')
+    expect(JSON.stringify(prepared.vault)).not.toContain('fixture-api-secret')
+    expect(readKdbxProtectedField(prepared.database, prepared.entryId, 'apiKey')).toBe('fixture-api-key')
+    expect(readKdbxProtectedField(prepared.database, prepared.entryId, 'apiSecret')).toBe('fixture-api-secret')
+    expect(() => readKdbxProtectedField(prepared.database, prepared.entryId, 'endpoint')).toThrow('not a protected value')
+    expect(() => readKdbxProtectedField(prepared.database, prepared.entryId, 'missing')).toThrow('not a protected value')
   })
 
   it('deletes an entry into the standard KDBX recycle bin', async () => {

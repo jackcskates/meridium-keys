@@ -252,6 +252,17 @@ they never existed; mark them superseded and link to the replacement.
   actions should not remain visually prominent, and recognizable type icons
   scan faster than single-letter badges.
 
+### D-033 - Direct protected-field copy
+
+- **Status:** Accepted
+- **Decision:** Show a labeled Copy action beside every populated protected
+  field in the selected-entry detail view. Keep values masked and ask the vault
+  worker to decrypt only the requested field when its Copy action is pressed.
+  Do not load the full entry or store copied plaintext in React state.
+- **Reason:** Copying a credential is the primary read interaction and should
+  not require entering an edit flow. One-field worker reads keep that convenience
+  inside the existing least-exposure boundary.
+
 ## Open
 
 ### D-005 - Standard KDBX compatibility

@@ -111,6 +111,9 @@ KeePass applications without requiring a proprietary file format.
   while limiting symbols to a broadly accepted service-compatible set.
 - Keep generated values inside the unsaved editor draft until the user saves or
   cancels the entry.
+- Copy any populated protected field directly from the selected-entry detail
+  view without opening Edit. Each value remains masked; only the requested
+  field is decrypted by the vault worker and handed to the system clipboard.
 
 **Proposed:**
 

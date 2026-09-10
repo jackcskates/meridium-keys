@@ -67,9 +67,11 @@ encrypts persisted Dropbox authorization and cached KDBX bytes.
 - Is destroyed on explicit lock and automatic-lock events.
 - Must not be serialized by debugging tools, state-persistence middleware, or
   analytics.
-- Protected entry passwords remain inside the worker until the user opens an
-  entry editor. The editor holds the active draft in volatile React memory only
-  and clears it on save, cancel, lock, or unmount.
+- Protected entry values remain inside the worker until the user opens an entry
+  editor or explicitly copies one masked field. Copy returns only that requested
+  field to the click handler; the plaintext is never placed in React state. The
+  editor holds the active draft in volatile React memory only and clears it on
+  save, cancel, lock, or unmount.
 - Moving an entry sends only its opaque KDBX entry and destination group IDs to
   the worker. The worker changes the standard KDBX parent relationship and
   re-encrypts the database without exposing protected fields to the React view.
@@ -95,6 +97,15 @@ encrypts persisted Dropbox authorization and cached KDBX bytes.
 ### Clipboard
 
 - Copy is an explicit user action.
+- The selected-entry view keeps protected values masked and identifies each
+  populated field by label. Each Copy control requests only its corresponding
+  field from the worker.
+- Apple clients prefer promise-backed `ClipboardItem` data so an installed
+  Safari PWA can preserve the original tap's clipboard authorization across the
+  worker round trip. Other clients use the text clipboard API directly; it is
+  also the Apple fallback when promise-backed data is rejected.
+- Copied plaintext is not stored in React state, logs, notifications, URLs, or
+  persistent browser storage.
 - Clipboard-clearing behavior is still open because browser support and user
   expectations differ.
 - The UI must state what it can and cannot clear reliably.

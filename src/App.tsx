@@ -813,6 +813,10 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
                 const session = vaultSessionRef.current
                 return session ? session.getEntry(entryId) : Promise.reject(new Error('The vault is locked. Open it again before editing an entry.'))
               }}
+              onReadProtectedField={(entryId, fieldKey) => {
+                const session = vaultSessionRef.current
+                return session ? session.getProtectedField(entryId, fieldKey) : Promise.reject(new Error('The vault is locked. Open it again before copying a protected value.'))
+              }}
               onLock={lockVault}
               onMoveEntry={moveVaultEntry}
               onSaveGroup={saveVaultGroup}

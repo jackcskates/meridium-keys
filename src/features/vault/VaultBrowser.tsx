@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react'
-import { Ellipsis, Pencil, Trash2 } from 'lucide-react'
+import { Check, Copy, Ellipsis, Pencil, Trash2 } from 'lucide-react'
+import { copyProtectedText } from './copyProtectedText'
 import { EntryTypeIcon } from './EntryTypeIcon'
 import { createEmptyEntryDraft, entryTypeDefinitions, entryTypeLabel, getEntryTypeDefinition, type EntryFieldDefinition } from './entryTypes'
 import { generateServicePassword, generatedPasswordLength } from './passwordGenerator'
@@ -11,6 +12,7 @@ type VaultBrowserProps = {
   onDeleteEntry: (entryId: string) => Promise<VaultSnapshot>
   onDeleteGroup: (groupId: string) => Promise<VaultSnapshot>
   onLoadEntry: (entryId: string) => Promise<VaultEntryDetails>
+  onReadProtectedField: (entryId: string, fieldKey: string) => Promise<string>
   onLock: () => void
   onMoveEntry: (entryId: string, groupId: string) => Promise<{ entryId: string; vault: VaultSnapshot }>
   onSaveEntry: (entry: VaultEntryDraft) => Promise<{ entryId: string; vault: VaultSnapshot }>
@@ -117,7 +119,7 @@ function MoveEntryDialog({ entry, vault, isMoving, error, onCancel, onMove }: {
   </form></DialogShell>
 }
 
-export function VaultBrowser({ vault, canEdit, onDeleteEntry, onDeleteGroup, onLoadEntry, onLock, onMoveEntry, onSaveEntry, onSaveGroup }: VaultBrowserProps) {
+export function VaultBrowser({ vault, canEdit, onDeleteEntry, onDeleteGroup, onLoadEntry, onLock, onMoveEntry, onReadProtectedField, onSaveEntry, onSaveGroup }: VaultBrowserProps) {
   const activeEntries = useMemo(() => vault.entries.filter((entry) => !entry.isDeleted), [vault.entries])
   const unfiledEntries = useMemo(() => activeEntries.filter((entry) => entry.groupId === vault.rootGroupId), [activeEntries, vault.rootGroupId])
   const activeGroups = useMemo(() => vault.groups.filter((group) => !group.isRecycleBin), [vault.groups])
@@ -152,6 +154,7 @@ export function VaultBrowser({ vault, canEdit, onDeleteEntry, onDeleteGroup, onL
   const [isMovingEntry, setIsMovingEntry] = useState(false)
   const [moveError, setMoveError] = useState('')
   const [moveStatus, setMoveStatus] = useState('')
+  const [copyState, setCopyState] = useState<{ entryId: string; fieldKey: string; status: 'copying' | 'copied' | 'error'; message: string } | null>(null)
   const nativeDragEntryIdRef = useRef('')
   const pointerDragRef = useRef<{ pointerId: number; entryId: string; targetGroupId: string } | null>(null)
   const groupMenuRef = useRef<HTMLDivElement>(null)
@@ -173,6 +176,12 @@ export function VaultBrowser({ vault, canEdit, onDeleteEntry, onDeleteGroup, onL
       document.removeEventListener('keydown', closeOnEscape)
     }
   }, [openGroupMenuId])
+
+  useEffect(() => {
+    if (copyState?.status !== 'copied') return
+    const timeout = window.setTimeout(() => setCopyState(null), 2400)
+    return () => window.clearTimeout(timeout)
+  }, [copyState])
 
   function resetEntryEditor() {
     setDraft(null)
@@ -221,6 +230,21 @@ export function VaultBrowser({ vault, canEdit, onDeleteEntry, onDeleteGroup, onL
       setSaveError(error instanceof Error ? error.message : 'That entry could not be prepared for editing.')
     } finally {
       setIsLoadingEntry(false)
+    }
+  }
+
+  async function copyProtectedField(entry: VaultEntrySummary, field: EntryFieldDefinition) {
+    setCopyState({ entryId: entry.id, fieldKey: field.key, status: 'copying', message: `Copying ${field.label.toLowerCase()}…` })
+    try {
+      await copyProtectedText(() => onReadProtectedField(entry.id, field.key))
+      setCopyState({ entryId: entry.id, fieldKey: field.key, status: 'copied', message: `${field.label} copied.` })
+    } catch (error) {
+      setCopyState({
+        entryId: entry.id,
+        fieldKey: field.key,
+        status: 'error',
+        message: error instanceof Error ? error.message : `${field.label} could not be copied.`,
+      })
     }
   }
 
@@ -394,6 +418,9 @@ export function VaultBrowser({ vault, canEdit, onDeleteEntry, onDeleteGroup, onL
   }
 
   const definition = draft ? getEntryTypeDefinition(draft.type) : null
+  const selectedProtectedFields = selectedEntry
+    ? getEntryTypeDefinition(selectedEntry.type).fields.filter((field) => selectedEntry.protectedFieldKeys.includes(field.key))
+    : []
 
   return <div className="vault-browser">
     <header className="vault-browser-header"><div className="vault-browser-title"><p className="eyebrow">KDBX {vault.version}</p><h1>{vault.databaseName}</h1><p>{activeEntries.length} {activeEntries.length === 1 ? 'entry' : 'entries'} · decrypted in memory</p></div><div className="vault-browser-actions"><button className="button button-secondary" onClick={onLock} type="button">Lock vault</button><button className="button button-primary" disabled={!canEdit || isSaving || isDeleting} onClick={beginCreate} title={canEdit ? 'Add entry' : 'Dropbox vaults can be edited; local files remain read only.'} type="button">Add entry</button></div></header>
@@ -492,7 +519,12 @@ export function VaultBrowser({ vault, canEdit, onDeleteEntry, onDeleteGroup, onL
           <label className="field"><span>Folder</span><select disabled={isSaving} onChange={(event) => setDraft({ ...draft, groupId: event.target.value })} value={draft.groupId}><option value={vault.rootGroupId}>No folder</option>{vault.groups.filter((group) => !group.isRecycleBin).map((group) => <option key={group.id} value={group.id}>{group.path}</option>)}</select></label>
           {definition.fields.map((field) => <EntryField disabled={isSaving} field={field} key={field.key} onChange={(value) => setDraft({ ...draft, fields: { ...draft.fields, [field.key]: value } })} onGenerate={field.key === 'password' ? () => setDraft({ ...draft, fields: { ...draft.fields, [field.key]: generateServicePassword() } }) : undefined} onToggle={() => setVisibleSecrets((current) => { const next = new Set(current); if (next.has(field.key)) next.delete(field.key); else next.add(field.key); return next })} value={draft.fields[field.key] || ''} visible={visibleSecrets.has(field.key)} />)}
           {saveError && <p className="unlock-error" role="alert">{saveError}</p>}<div className="entry-editor-actions"><button className="button button-secondary" disabled={isSaving} onClick={resetEntryEditor} type="button">Cancel</button><button className="button button-primary" disabled={isSaving} type="submit">{isSaving ? 'Encrypting and saving…' : 'Save entry'}</button></div>
-        </form> : selectedEntry ? <><div className="entry-detail-heading"><span className="entry-glyph entry-glyph-large"><EntryTypeIcon size={21} type={selectedEntry.type} /></span><div><p className="eyebrow">{selectedEntry.isDeleted ? 'Recycle Bin' : entryTypeLabel(selectedEntry.type)}</p><h2>{selectedEntry.title}</h2></div></div><dl><div><dt>Type</dt><dd>{entryTypeLabel(selectedEntry.type)}</dd></div><div><dt>Folder</dt><dd>{selectedEntry.groupId === vault.rootGroupId ? 'No folder' : vault.groups.find((group) => group.id === selectedEntry.groupId)?.path || '—'}</dd></div>{selectedEntry.username && <div><dt>Username</dt><dd>{selectedEntry.username}</dd></div>}{selectedEntry.url && <div><dt>Website</dt><dd>{selectedEntry.url}</dd></div>}{selectedEntry.hasPassword && <div><dt>Protected fields</dt><dd className="masked-secret">••••••••••••</dd></div>}</dl>{saveError && <p className="unlock-error" role="alert">{saveError}</p>}{moveError && <p className="unlock-error" role="alert">{moveError}</p>}{!selectedEntry.isDeleted && canEdit && <div className="entry-detail-actions"><button className="button button-secondary" disabled={isLoadingEntry || isMovingEntry} onClick={() => void beginEdit(selectedEntry)} type="button">{isLoadingEntry ? 'Preparing…' : 'Edit entry'}</button><button className="text-button" disabled={isMovingEntry || (selectedEntry.groupId === vault.rootGroupId && vault.groups.every((group) => group.isRecycleBin))} onClick={() => { setMoveError(''); setEntryToMove(selectedEntry) }} type="button">Move entry</button><button className="text-button text-button-danger" disabled={isMovingEntry} onClick={() => { setDeleteError(''); setEntryToDelete(selectedEntry) }} type="button">Delete entry</button></div>}<p className="read-only-note">Protected values are revealed only inside the editor while this vault is unlocked.</p></> : <p className="vault-empty-state">Choose an entry or add a new one.</p>}
+        </form> : selectedEntry ? <><div className="entry-detail-heading"><span className="entry-glyph entry-glyph-large"><EntryTypeIcon size={21} type={selectedEntry.type} /></span><div><p className="eyebrow">{selectedEntry.isDeleted ? 'Recycle Bin' : entryTypeLabel(selectedEntry.type)}</p><h2>{selectedEntry.title}</h2></div></div><dl><div><dt>Type</dt><dd>{entryTypeLabel(selectedEntry.type)}</dd></div><div><dt>Folder</dt><dd>{selectedEntry.groupId === vault.rootGroupId ? 'No folder' : vault.groups.find((group) => group.id === selectedEntry.groupId)?.path || '—'}</dd></div>{selectedEntry.username && <div><dt>Username</dt><dd>{selectedEntry.username}</dd></div>}{selectedEntry.url && <div><dt>Website</dt><dd>{selectedEntry.url}</dd></div>}{selectedProtectedFields.map((field) => {
+          const isCurrent = copyState?.entryId === selectedEntry.id && copyState.fieldKey === field.key
+          const isCopying = isCurrent && copyState.status === 'copying'
+          const isCopied = isCurrent && copyState.status === 'copied'
+          return <div className="protected-detail-row" key={field.key}><dt>{field.label}</dt><dd><span aria-label={`${field.label} hidden`} className="masked-secret">••••••••••••</span><button aria-label={`Copy ${field.label.toLowerCase()}`} className={`protected-copy-button ${isCopied ? 'is-copied' : ''}`} disabled={isCopying} onClick={() => void copyProtectedField(selectedEntry, field)} type="button">{isCopied ? <Check aria-hidden="true" size={16} /> : <Copy aria-hidden="true" size={16} />}<span>{isCopying ? 'Copying…' : isCopied ? 'Copied' : 'Copy'}</span></button></dd></div>
+        })}</dl>{copyState?.entryId === selectedEntry.id && <p aria-live="polite" className={`copy-status ${copyState.status === 'error' ? 'is-error' : ''}`} role={copyState.status === 'error' ? 'alert' : 'status'}>{copyState.message}</p>}{saveError && <p className="unlock-error" role="alert">{saveError}</p>}{moveError && <p className="unlock-error" role="alert">{moveError}</p>}{!selectedEntry.isDeleted && canEdit && <div className="entry-detail-actions"><button className="button button-secondary" disabled={isLoadingEntry || isMovingEntry} onClick={() => void beginEdit(selectedEntry)} type="button">{isLoadingEntry ? 'Preparing…' : 'Edit entry'}</button><button className="text-button" disabled={isMovingEntry || (selectedEntry.groupId === vault.rootGroupId && vault.groups.every((group) => group.isRecycleBin))} onClick={() => { setMoveError(''); setEntryToMove(selectedEntry) }} type="button">Move entry</button><button className="text-button text-button-danger" disabled={isMovingEntry} onClick={() => { setDeleteError(''); setEntryToDelete(selectedEntry) }} type="button">Delete entry</button></div>}<p className="read-only-note">Protected values stay masked and are decrypted one at a time only when you copy or edit them.</p></> : <p className="vault-empty-state">Choose an entry or add a new one.</p>}
       </section>
     </div>
     {entryToDelete && <DeleteEntryDialog entry={entryToDelete} error={deleteError} isDeleting={isDeleting} onCancel={() => { if (!isDeleting) { setDeleteError(''); setEntryToDelete(null) } }} onDelete={() => void deleteEntry()} />}

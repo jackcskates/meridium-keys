@@ -15,6 +15,7 @@ import type {
   VaultEntryDetails,
   VaultEntryDraft,
   VaultEntrySummary,
+  VaultEntryType,
   VaultGroupDraft,
   VaultGroupSummary,
   VaultOpenErrorCode,
@@ -100,6 +101,16 @@ function hasProtectedPassword(entry: KdbxEntry) {
   return [...entry.fields.values()].some((value) => value instanceof ProtectedValue && value.byteLength > 0)
 }
 
+function protectedFieldKeys(entry: KdbxEntry, type: VaultEntryType) {
+  return getEntryTypeDefinition(type).fields
+    .filter((field) => field.kind === 'secret' || field.kind === 'secret-textarea')
+    .filter((field) => {
+      const value = entry.fields.get(field.storageKey)
+      return value instanceof ProtectedValue && value.byteLength > 0
+    })
+    .map((field) => field.key)
+}
+
 function entryTypeFor(entry: KdbxEntry) {
   const storedType = plainField(entry, entryTypeMetadataKey)
   if (isVaultEntryType(storedType)) return storedType
@@ -149,6 +160,7 @@ function mapGroup(
       url: plainField(entry, 'URL'),
       subtitle,
       hasPassword: hasProtectedPassword(entry),
+      protectedFieldKeys: protectedFieldKeys(entry, type),
       icon: typeof entry.icon === 'number' ? entry.icon : null,
       isDeleted: isRecycleBin,
     })
@@ -257,6 +269,23 @@ export function readKdbxEntryDetails(database: Kdbx, entryId: string): VaultEntr
     title: entryFieldText(entry, 'Title'),
     fields: Object.fromEntries(definition.fields.map((field) => [field.key, entryFieldText(entry, field.storageKey)])),
   }
+}
+
+export function readKdbxProtectedField(database: Kdbx, entryId: string, fieldKey: string) {
+  const entry = findEntry(database, entryId)
+  if (!entry?.parentGroup) throw new VaultOpenError('WORKER_FAILURE', 'That entry could not be found in the open vault.')
+
+  const definition = getEntryTypeDefinition(entryTypeFor(entry))
+  const field = definition.fields.find((candidate) => candidate.key === fieldKey)
+  if (!field || (field.kind !== 'secret' && field.kind !== 'secret-textarea')) {
+    throw new VaultOpenError('WORKER_FAILURE', 'That field is not a protected value in this entry.')
+  }
+
+  const value = entry.fields.get(field.storageKey)
+  if (!(value instanceof ProtectedValue) || value.byteLength === 0) {
+    throw new VaultOpenError('WORKER_FAILURE', 'That protected value is empty or unavailable.')
+  }
+  return value.getText()
 }
 
 export async function prepareKdbxEntrySave(database: Kdbx, draft: VaultEntryDraft, fileName: string) {

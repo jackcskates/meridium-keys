@@ -2,7 +2,7 @@
 
 import { DOMParser as XmlDomParser, XMLSerializer as XmlSerializer } from '@xmldom/xmldom'
 import type { Kdbx } from 'kdbxweb'
-import { createKdbxData, loadKdbxDatabase, mapKdbxSnapshot, prepareKdbxEntryDelete, prepareKdbxEntryMove, prepareKdbxEntrySave, prepareKdbxGroupDelete, prepareKdbxGroupSave, readKdbxEntryDetails, VaultOpenError } from './kdbx'
+import { createKdbxData, loadKdbxDatabase, mapKdbxSnapshot, prepareKdbxEntryDelete, prepareKdbxEntryMove, prepareKdbxEntrySave, prepareKdbxGroupDelete, prepareKdbxGroupSave, readKdbxEntryDetails, readKdbxProtectedField, VaultOpenError } from './kdbx'
 import type { VaultWorkerRequest, VaultWorkerResponse } from './types'
 
 const scope = self as DedicatedWorkerGlobalScope
@@ -51,6 +51,11 @@ scope.onmessage = async (event: MessageEvent<VaultWorkerRequest>) => {
 
     if (event.data.type === 'get-entry') {
       respond({ type: 'entry', entry: readKdbxEntryDetails(database, event.data.entryId), requestId: event.data.requestId })
+      return
+    }
+
+    if (event.data.type === 'get-protected-field') {
+      respond({ type: 'protected-field', value: readKdbxProtectedField(database, event.data.entryId, event.data.fieldKey), requestId: event.data.requestId })
       return
     }
 

@@ -36,7 +36,11 @@ Last verified: 2026-09-10.
   entry summaries. The vault root is represented as “No folder,” not as a
   duplicate folder named after the vault.
 - Three-pane group, entry, and detail browser on desktop, with a stacked phone layout.
-- Masked password presence without extracting the protected password into the React model.
+- Masked protected-field presence without extracting protected values into the
+  React snapshot.
+- Direct Copy controls beside every populated protected field in the selected
+  entry. A click asks the worker for only that field and writes it to the system
+  clipboard without opening Edit or storing the plaintext in React state.
 - Explicit lock that removes the decrypted snapshot from application state.
 - Safe wrong-password, invalid-file, unsupported-format, corrupt-file, timeout, and worker errors.
 - Dropbox App Folder authorization using OAuth authorization code with PKCE and
@@ -86,9 +90,12 @@ Last verified: 2026-09-10.
 - The browser receives a `File` selected by the user and does not upload it.
 - The master password is read from an uncontrolled form, sent to the worker, and the form is reset immediately.
 - The rendered snapshot contains entry title, type, safe subtitle, folder
-  metadata, and only a protected-field presence flag. Protected values enter the
-  page only while that entry is actively edited.
-- Reveal and copy outside the entry editor, search, local encrypted caching, and recovery are not part of this slice.
+  metadata, and the keys of populated protected fields. It never contains their
+  values. The worker returns one plaintext protected value only in response to
+  its explicit Copy action; entry editing remains the only operation that loads
+  the complete typed entry into volatile React state.
+- Reveal outside the entry editor, search, local encrypted caching, automatic
+  clipboard clearing, and recovery are not part of this slice.
 - Local device files remain read only because a browser file selection does not
   grant safe overwrite access. Dropbox vaults support revision-safe entry updates.
 - The service worker precaches versioned app-shell assets only; it has no runtime
@@ -100,7 +107,8 @@ Last verified: 2026-09-10.
 ## Compatibility evidence
 
 - Automated fixtures cover KDBX 4 with Argon2id and AES-KDF.
-- Wrong-password, malformed-file, empty-password, and protected-value non-disclosure tests pass.
+- Wrong-password, malformed-file, empty-password, protected-value
+  non-disclosure, one-field protected reads, and clipboard-path tests pass.
 - A newly generated KDBX 4 vault is reopened with its chosen master password and rejected with a wrong password in automated compatibility tests.
 - The corrected local PWA completed a live Dropbox creation on 2026-09-10:
   it encrypted a uniquely named test vault, uploaded it to the scoped App Folder,

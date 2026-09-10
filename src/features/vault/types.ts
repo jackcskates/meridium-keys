@@ -19,6 +19,7 @@ export type VaultEntrySummary = {
   url: string
   subtitle: string
   hasPassword: boolean
+  protectedFieldKeys: string[]
   icon: number | null
   isDeleted: boolean
 }
@@ -73,6 +74,7 @@ export type VaultWorkerRequest =
   | { type: 'unlock'; file: File; password: string }
   | { type: 'create'; databaseName: string; fileName: string; password: string }
   | { type: 'get-entry'; entryId: string; requestId: string }
+  | { type: 'get-protected-field'; entryId: string; fieldKey: string; requestId: string }
   | { type: 'prepare-entry-save'; entry: VaultEntryDraft; requestId: string }
   | { type: 'prepare-entry-delete'; entryId: string; requestId: string }
   | { type: 'prepare-entry-move'; entryId: string; groupId: string; requestId: string }
@@ -85,6 +87,7 @@ export type VaultWorkerResponse =
   | { type: 'success'; vault: VaultSnapshot }
   | { type: 'created'; data: ArrayBuffer; fileName: string }
   | { type: 'entry'; entry: VaultEntryDetails; requestId: string }
+  | { type: 'protected-field'; value: string; requestId: string }
   | { type: 'change-prepared'; changeId: string; data: ArrayBuffer; entryId?: string; groupId?: string; requestId: string; vault: VaultSnapshot }
   | { type: 'change-finished'; requestId: string; vault: VaultSnapshot }
   | { type: 'error'; code: VaultOpenErrorCode; message: string; requestId?: string }

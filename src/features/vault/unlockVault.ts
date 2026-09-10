@@ -67,6 +67,12 @@ export class UnlockedVaultSession {
     return message.entry
   }
 
+  async getProtectedField(entryId: string, fieldKey: string) {
+    const message = await this.request((requestId) => ({ type: 'get-protected-field', entryId, fieldKey, requestId }))
+    if (message.type !== 'protected-field') throw new VaultOpenError('WORKER_FAILURE', 'The secure vault worker returned an unexpected protected field response.')
+    return message.value
+  }
+
   async prepareEntrySave(entry: VaultEntryDraft): Promise<PreparedVaultChange> {
     const message = await this.request((requestId) => ({ type: 'prepare-entry-save', entry, requestId }))
     if (message.type !== 'change-prepared') throw new VaultOpenError('WORKER_FAILURE', 'The secure vault worker returned an unexpected save response.')
