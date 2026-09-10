@@ -55,6 +55,10 @@ for careful credential work, with lock and sync status always explicit.
   “Home,” storage-provider sections, vault name and lock state, “New vault,”
   and Dropbox connection status. Collapsed mode preserves the same destinations
   as accessible icon controls.
+- Home is an action landing area, not a second vault library. It contains only
+  two large side-by-side cards for creating a new vault or opening a KDBX file
+  from the device. The cards do not use directional arrows. Dropbox vaults and
+  their management actions remain in the sidebar.
 - In collapsed mode, the Meridium symbol is the expand control; no separate
   expand arrow competes for rail space. Rail icons share one center line and
   comparable optical size.

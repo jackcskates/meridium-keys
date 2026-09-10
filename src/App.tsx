@@ -573,17 +573,29 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
           <div className="sidebar-section">
             <div className="sidebar-section-label"><span>On Dropbox</span></div>
             {dropbox.vaults.map((vault) => (
-              <button
-                className={`sidebar-row vault-row ${activeDropboxVaultId === vault.id && (activeView === 'unlock' || activeView === 'browse') ? 'is-active' : ''}`}
-                disabled={Boolean(openingDropboxVaultId)}
-                key={vault.id}
-                onClick={() => void openDropboxVault(vault)}
-                title={vault.pathDisplay}
-                type="button"
-              >
-                <span className="vault-avatar">{vault.name.slice(0, 1).toUpperCase()}<span className="vault-lock"><Icon name={activeDropboxVaultId === vault.id && vaultSnapshot ? 'check' : 'lock'} size={11} /></span></span>
-                <span className="sidebar-row-copy"><strong>{vault.name.replace(/\.kdbx$/i, '')}</strong><small>{openingDropboxVaultId === vault.id ? 'Downloading…' : activeDropboxVaultId === vault.id && vaultSnapshot ? 'Open · editable' : 'Dropbox · locked'}</small></span>
-              </button>
+              <div className="sidebar-vault-item" key={vault.id}>
+                <button
+                  className={`sidebar-row vault-row ${activeDropboxVaultId === vault.id && (activeView === 'unlock' || activeView === 'browse') ? 'is-active' : ''}`}
+                  disabled={Boolean(openingDropboxVaultId || deletingDropboxVaultId)}
+                  onClick={() => void openDropboxVault(vault)}
+                  title={vault.pathDisplay}
+                  type="button"
+                >
+                  <span className="vault-avatar">{vault.name.slice(0, 1).toUpperCase()}<span className="vault-lock"><Icon name={activeDropboxVaultId === vault.id && vaultSnapshot ? 'check' : 'lock'} size={11} /></span></span>
+                  <span className="sidebar-row-copy"><strong>{vault.name.replace(/\.kdbx$/i, '')}</strong><small>{openingDropboxVaultId === vault.id ? 'Downloading…' : activeDropboxVaultId === vault.id && vaultSnapshot ? 'Open · editable' : 'Dropbox · locked'}</small></span>
+                </button>
+                <button
+                  aria-haspopup="dialog"
+                  aria-label={`Delete ${vault.name.replace(/\.kdbx$/i, '')} from Dropbox`}
+                  className="sidebar-vault-delete"
+                  disabled={Boolean(openingDropboxVaultId || deletingDropboxVaultId)}
+                  onClick={() => requestDeleteVault(vault)}
+                  title={`Delete ${vault.name.replace(/\.kdbx$/i, '')} from Dropbox`}
+                  type="button"
+                >
+                  <Icon name="trash" size={15} />
+                </button>
+              </div>
             ))}
             {!dropbox.vaults.length && <p className="sidebar-empty">{dropbox.status === 'loading' || dropbox.status === 'connecting' ? 'Connecting…' : dropboxConnected ? 'No vaults found' : 'Not connected'}</p>}
             <button className="sidebar-row sidebar-new-vault" onClick={() => setView(dropboxConnected ? 'create' : 'connect')} title="New vault" type="button">
@@ -638,58 +650,19 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
 
           {activeView === 'vaults' && (
             <div className="vault-chooser">
-              <div className="section-heading">
-                <div>
-                  <p className="eyebrow">Vaults</p>
-                  <h1>Choose where to begin</h1>
-                  <p>Open an encrypted vault or create a new one in your Dropbox folder.</p>
-                </div>
-              </div>
-
+              <h1 className="visually-hidden">Vault actions</h1>
               <div className="choice-grid">
                 <button className="choice-card choice-primary" onClick={() => setView('create')} type="button">
                   <span className="choice-icon"><Icon name="plus" size={26} /></span>
-                  <span><strong>Create a new vault</strong><small>Set its name and independent master password.</small></span>
-                  <Icon name="chevron-right" />
+                  <span className="choice-card-copy"><strong>Create a new vault</strong><small>Set its name and independent master password.</small></span>
                 </button>
                 <button className="choice-card" onClick={() => fileInputRef.current?.click()} type="button">
                   <span className="choice-icon"><Icon name="folder" size={25} /></span>
-                  <span><strong>Open an existing vault</strong><small>Choose a standard KDBX file from Dropbox or this device.</small></span>
-                  <Icon name="chevron-right" />
+                  <span className="choice-card-copy"><strong>Open an existing vault</strong><small>Choose a standard KDBX file from this device.</small></span>
                 </button>
               </div>
 
               {dropbox.error && <p className="unlock-error" role="alert">{dropbox.error}</p>}
-              {dropbox.vaults.length ? (
-                <div className="dropbox-vault-list" aria-label="Dropbox vaults">
-                  {dropbox.vaults.map((vault) => (
-                    <div className="dropbox-vault-row" key={vault.id}>
-                      <button className="dropbox-vault-open" disabled={Boolean(openingDropboxVaultId || deletingDropboxVaultId)} onClick={() => void openDropboxVault(vault)} type="button">
-                        <span className="vault-avatar">{vault.name.slice(0, 1).toUpperCase()}</span>
-                        <span><strong>{vault.name.replace(/\.kdbx$/i, '')}</strong><small>{vault.pathDisplay} · {(vault.size / 1024).toFixed(1)} KB</small></span>
-                        <span>{openingDropboxVaultId === vault.id ? 'Downloading…' : 'Open'}</span>
-                      </button>
-                      <button
-                        aria-haspopup="dialog"
-                        aria-label={`Delete ${vault.name.replace(/\.kdbx$/i, '')} from Dropbox`}
-                        className="vault-delete-button"
-                        disabled={Boolean(openingDropboxVaultId || deletingDropboxVaultId)}
-                        onClick={() => requestDeleteVault(vault)}
-                        title={`Delete ${vault.name.replace(/\.kdbx$/i, '')} from Dropbox`}
-                        type="button"
-                      >
-                        <Icon name="trash" size={18} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="empty-vaults">
-                  <span className="empty-icon"><Icon name="cloud" /></span>
-                  <div><strong>{dropbox.status === 'loading' ? 'Checking Dropbox…' : 'No vaults found yet'}</strong><span>Encrypted KDBX files in Meridium Keys will appear here.</span></div>
-                  <button className="icon-button" aria-label="Check Dropbox again" disabled={dropbox.status === 'loading'} onClick={() => void dropbox.refresh()} title="Check Dropbox again" type="button"><Icon name="refresh" /></button>
-                </div>
-              )}
             </div>
           )}
 

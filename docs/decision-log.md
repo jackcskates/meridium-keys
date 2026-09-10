@@ -218,6 +218,17 @@ they never existed; mark them superseded and link to the replacement.
 - **Reason:** Phone keyboards and icon masks must not make the same application
   credential or identity behave differently across devices.
 
+### D-030 - Home action landing area
+
+- **Status:** Accepted
+- **Decision:** Keep Dropbox vault instances in the primary sidebar and do not
+  repeat them in Home. Home contains exactly two large side-by-side landing
+  cards: create a new vault and open an existing KDBX file from the device. The
+  cards do not use arrows. Vault deletion is available from the sidebar.
+- **Reason:** The sidebar already owns vault navigation. Repeating the same
+  vaults in the workspace adds clutter and weakens the two meaningful start
+  actions.
+
 ## Open
 
 ### D-005 - Standard KDBX compatibility

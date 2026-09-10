@@ -20,6 +20,9 @@ Last verified: 2026-09-10.
 - Responsive Meridium application frame with a collapsible vault sidebar.
 - Home navigation naming, icon-free storage section labels, explicit green
   Dropbox-ready status, and a bottom placeholder profile/sign-out area.
+- Home now presents only two large side-by-side landing actions—create a new
+  vault or open a device KDBX file—without repeating the Dropbox vault library.
+  Dropbox vault deletion remains available from the sidebar.
 - Local `.kdbx` selection with extension and 64 MB size validation.
 - Read-only KDBX 4 unlock for password-protected Argon2id, Argon2d, and AES-KDF vaults.
 - Key derivation and KDBX parsing in a dedicated web worker.
