@@ -101,6 +101,19 @@ they never existed; mark them superseded and link to the replacement.
 - **Limitation:** Twelve-word recovery and revision-safe updates to existing
   vaults remain separate, unimplemented security slices.
 
+### D-020 - Initial vault master-password guidance
+
+- **Status:** Accepted
+- **Decision:** Require 15–128 Unicode characters, reject a limited local set of
+  common examples and repeated-character values, require a value different from
+  the vault name, and require matching confirmation. Show each requirement live
+  while the password fields have focus. Do not require arbitrary uppercase,
+  lowercase, number, or symbol composition.
+- **Reason:** Long passphrases remain usable while the UI gives explicit,
+  accessible feedback consistent with Meridium Inputs guidance.
+- **Limitation:** This is local validation only. A maintained compromised-password
+  check requires a separate privacy-preserving design.
+
 ## Open
 
 ### D-005 - Standard KDBX compatibility

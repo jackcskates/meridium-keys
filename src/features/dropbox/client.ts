@@ -4,7 +4,7 @@ const apiEndpoint = 'https://api.dropboxapi.com/2'
 const contentEndpoint = 'https://content.dropboxapi.com/2'
 
 type DropboxEntry = {
-  '.tag': 'file' | 'folder' | 'deleted'
+  '.tag'?: 'file' | 'folder' | 'deleted'
   id?: string
   name: string
   path_display?: string
@@ -52,9 +52,9 @@ export async function loadDropboxAccount(session: DropboxSession) {
   return account.name?.display_name?.trim() || 'Dropbox'
 }
 
-function mapVault(entry: DropboxEntry): DropboxVaultFile | null {
+function mapVault(entry: DropboxEntry, directFileMetadata = false): DropboxVaultFile | null {
   if (
-    entry['.tag'] !== 'file'
+    (entry['.tag'] !== 'file' && !(directFileMetadata && entry['.tag'] === undefined))
     || !entry.name.toLowerCase().endsWith('.kdbx')
     || !entry.id
     || !entry.rev
@@ -89,7 +89,7 @@ export async function listDropboxVaults(session: DropboxSession) {
   }
 
   return entries
-    .map(mapVault)
+    .map((entry) => mapVault(entry))
     .filter((entry): entry is DropboxVaultFile => entry !== null)
     .sort((left, right) => left.name.localeCompare(right.name))
 }
@@ -131,14 +131,19 @@ export async function uploadNewDropboxVault(session: DropboxSession, file: File)
   if (!response.ok) {
     const details = await response.text()
     if (response.status === 409 && details.toLowerCase().includes('conflict')) {
-      throw new DropboxApiError(`A vault named ${file.name.replace(/\.kdbx$/i, '')} already exists in Dropbox.`)
+      throw new DropboxApiError(`A vault named ${file.name.replace(/\.kdbx$/i, '')} already exists. Open it from All vaults or choose another name.`)
     }
     throw new DropboxApiError(response.status === 401
       ? 'The Dropbox connection expired. Connect again.'
       : `${file.name} could not be saved to Dropbox. Your existing files were not changed.`)
   }
 
-  const vault = mapVault(await response.json() as DropboxEntry)
-  if (!vault) throw new DropboxApiError('Dropbox saved the file but returned incomplete vault information. Refresh the library.')
+  const vault = mapVault(await response.json() as DropboxEntry, true)
+  if (!vault) {
+    const refreshedVault = (await listDropboxVaults(session))
+      .find((entry) => entry.pathDisplay.localeCompare(`/${file.name}`, undefined, { sensitivity: 'accent' }) === 0)
+    if (refreshedVault) return refreshedVault
+    throw new DropboxApiError('Dropbox saved the file, but the vault could not be found afterward. Check the Dropbox folder before trying again.')
+  }
   return vault
 }

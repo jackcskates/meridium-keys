@@ -35,6 +35,12 @@ encrypts persisted Dropbox authorization and cached KDBX bytes.
 - Passed to the cryptographic worker without logging or serialization.
 - Removed from form state immediately after use.
 - Never stored for automatic unlock until a separate reviewed design exists.
+- New vault creation currently requires 15–128 Unicode characters, rejects a
+  small local set of common examples and repeated single-character values,
+  requires a value different from the vault name, and requires confirmation.
+- Long passphrases are accepted without arbitrary uppercase, number, or symbol
+  rules. The live checklist is guidance and local validation, not a claim that
+  the password has been checked against a maintained breach corpus.
 
 ### New vault encryption
 

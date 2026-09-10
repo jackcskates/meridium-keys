@@ -5,8 +5,9 @@ import type { DropboxVaultFile } from './features/dropbox/types'
 import { useDropbox } from './features/dropbox/useDropbox'
 import { usePwaLifecycle } from './features/pwa/usePwaLifecycle'
 import { VaultBrowser } from './features/vault/VaultBrowser'
-import { createVaultFile, type CreateVaultStage } from './features/vault/createVault'
+import { createVaultFile, toVaultFileName, type CreateVaultStage } from './features/vault/createVault'
 import { VaultOpenError } from './features/vault/kdbx'
+import { vaultPasswordRequirements } from './features/vault/passwordPolicy'
 import type { VaultSnapshot } from './features/vault/types'
 import { unlockVaultFile, type UnlockStage } from './features/vault/unlockVault'
 import './App.css'
@@ -183,6 +184,7 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
   const [password, setPassword] = useState('')
   const [confirmation, setConfirmation] = useState('')
   const [showPassword, setShowPassword] = useState(false)
+  const [passwordGuideOpen, setPasswordGuideOpen] = useState(false)
   const [formTouched, setFormTouched] = useState(false)
   const [createError, setCreateError] = useState('')
   const [createStage, setCreateStage] = useState<CreateVaultStage | 'uploading' | null>(null)
@@ -202,8 +204,19 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
   const totalVaults = dropbox.vaults.length + (selectedStorage === 'device' && selectedFile ? 1 : 0)
   const activeView = dropbox.isConnected && view === 'connect' ? 'vaults' : view
 
-  const passwordsMatch = password.length > 0 && password === confirmation
-  const createIsValid = vaultName.trim().length > 0 && password.length >= 12 && passwordsMatch
+  const passwordRequirements = vaultPasswordRequirements(password, vaultName, confirmation)
+  const passwordReady = passwordRequirements.every((requirement) => requirement.met)
+  const passwordsMatch = passwordRequirements.find((requirement) => requirement.id === 'confirmation')?.met ?? false
+  let proposedVaultFileName = ''
+  try {
+    if (vaultName.trim()) proposedVaultFileName = toVaultFileName(vaultName)
+  } catch {
+    proposedVaultFileName = ''
+  }
+  const vaultNameTaken = Boolean(proposedVaultFileName) && dropbox.vaults.some(
+    (vault) => vault.pathDisplay.localeCompare(`/${proposedVaultFileName}`, undefined, { sensitivity: 'accent' }) === 0,
+  )
+  const createIsValid = Boolean(proposedVaultFileName) && passwordReady && !vaultNameTaken
   const workspaceTitle = activeView === 'connect'
     ? 'Connect storage'
     : activeView === 'vaults'
@@ -279,7 +292,10 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
     setFormTouched(true)
     setCreateError('')
 
-    if (!createIsValid) return
+    if (!createIsValid) {
+      if (!passwordReady) setPasswordGuideOpen(true)
+      return
+    }
     if (!dropbox.session) {
       setCreateError('Connect Dropbox before creating this vault.')
       return
@@ -287,8 +303,10 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
 
     const databaseName = vaultName.trim()
     const masterPassword = password
+    setFormTouched(false)
     setPassword('')
     setConfirmation('')
+    setPasswordGuideOpen(false)
     setCreateStage('creating')
 
     try {
@@ -310,6 +328,7 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
     setVaultName('')
     setPassword('')
     setConfirmation('')
+    setPasswordGuideOpen(false)
     setFormTouched(false)
     setCreateError('')
     setCreateStage(null)
@@ -484,21 +503,58 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
               <div className="form-stack">
                 <label className="field">
                   <span>Vault name</span>
-                  <input autoComplete="off" disabled={Boolean(createStage)} onChange={(event) => setVaultName(event.target.value)} placeholder="Personal" required value={vaultName} />
+                  <input autoComplete="off" disabled={Boolean(createStage)} onChange={(event) => { setVaultName(event.target.value); setCreateError('') }} placeholder="Personal" required value={vaultName} />
+                  {vaultNameTaken && <small className="field-error">That vault already exists. Open it from All vaults or choose another name.</small>}
                 </label>
-                <label className="field">
-                  <span>Master password</span>
-                  <div className="secret-input">
-                    <input autoComplete="new-password" disabled={Boolean(createStage)} minLength={12} onChange={(event) => setPassword(event.target.value)} placeholder="At least 12 characters" required type={showPassword ? 'text' : 'password'} value={password} />
-                    <button aria-label={showPassword ? 'Hide master password' : 'Show master password'} disabled={Boolean(createStage)} onClick={() => setShowPassword((current) => !current)} type="button"><Icon name={showPassword ? 'eye-off' : 'eye'} /></button>
-                  </div>
-                  <small className={formTouched && password.length < 12 ? 'field-error' : ''}>Use 12 or more characters.</small>
-                </label>
-                <label className="field">
-                  <span>Confirm master password</span>
-                  <input autoComplete="new-password" disabled={Boolean(createStage)} minLength={12} onChange={(event) => setConfirmation(event.target.value)} required type={showPassword ? 'text' : 'password'} value={confirmation} />
-                  {formTouched && !passwordsMatch && <small className="field-error">The passwords must match.</small>}
-                </label>
+                <div
+                  className="password-creation"
+                  onBlurCapture={(event) => {
+                    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setPasswordGuideOpen(false)
+                  }}
+                  onFocusCapture={() => setPasswordGuideOpen(true)}
+                >
+                  <label className="field">
+                    <span>Master password</span>
+                    <div className="secret-input">
+                      <input
+                        aria-describedby={passwordGuideOpen ? 'vault-password-requirements' : undefined}
+                        aria-invalid={formTouched && !passwordReady}
+                        autoComplete="new-password"
+                        disabled={Boolean(createStage)}
+                        maxLength={128}
+                        minLength={15}
+                        onChange={(event) => setPassword(event.target.value)}
+                        placeholder="A few unrelated words work well"
+                        required
+                        type={showPassword ? 'text' : 'password'}
+                        value={password}
+                      />
+                      <button aria-label={showPassword ? 'Hide master password' : 'Show master password'} aria-pressed={showPassword} disabled={Boolean(createStage)} onClick={() => setShowPassword((current) => !current)} type="button"><Icon name={showPassword ? 'eye-off' : 'eye'} /></button>
+                    </div>
+                    <small className={formTouched && !passwordReady ? 'field-error' : ''}>Spaces and pasted passphrases are welcome.</small>
+                  </label>
+
+                  {passwordGuideOpen && (
+                    <aside className="password-requirements" id="vault-password-requirements">
+                      <strong>{passwordReady ? 'Password ready' : 'Your password needs:'}</strong>
+                      <ul aria-label="Password requirements">
+                        {passwordRequirements.map((requirement) => (
+                          <li className={requirement.met ? 'is-met' : ''} data-met={requirement.met} key={requirement.id}>
+                            <span aria-hidden="true" className="password-rule-icon">{requirement.met && <Icon name="check" size={13} />}</span>
+                            <span>{requirement.label}<span className="visually-hidden"> — {requirement.met ? 'met' : 'not yet met'}</span></span>
+                          </li>
+                        ))}
+                      </ul>
+                      <p aria-live="polite" role="status">{passwordRequirements.filter((requirement) => requirement.met).length} of {passwordRequirements.length} requirements met</p>
+                    </aside>
+                  )}
+
+                  <label className="field">
+                    <span>Confirm master password</span>
+                    <input aria-invalid={formTouched && !passwordsMatch} autoComplete="new-password" disabled={Boolean(createStage)} maxLength={128} minLength={15} onChange={(event) => setConfirmation(event.target.value)} required type={showPassword ? 'text' : 'password'} value={confirmation} />
+                    {formTouched && !passwordsMatch && <small className="field-error">The passwords must match.</small>}
+                  </label>
+                </div>
               </div>
 
               <div className="recovery-option recovery-pending">

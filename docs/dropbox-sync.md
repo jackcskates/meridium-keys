@@ -26,6 +26,9 @@ Music credentials, Swift-specific code, or media-library behavior.
 - Newly created standard KDBX files upload directly to the App Folder. Creation
   uses Dropbox add mode, disables automatic renaming, and treats an existing
   filename as a visible conflict rather than overwriting it.
+- The upload route returns direct file metadata rather than a list-folder entry.
+  The client accepts that shape and, if required fields are unexpectedly absent,
+  refreshes the App Folder once to reconcile the file that Dropbox already saved.
 - Current scopes are `account_info.read`, `files.metadata.read`,
   `files.content.read`, and `files.content.write`. Write is currently used only
   for new-file creation; updates remain blocked until revision-safe save exists.

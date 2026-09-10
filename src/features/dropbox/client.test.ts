@@ -72,7 +72,6 @@ describe('Dropbox client', () => {
 
   it('uploads a new vault without allowing overwrite or autorename', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
-      '.tag': 'file',
       id: 'id:new',
       name: 'Personal.kdbx',
       path_display: '/Personal.kdbx',
@@ -91,6 +90,30 @@ describe('Dropbox client', () => {
     expect(result.id).toBe('id:new')
     expect(argument).toMatchObject({ path: '/Personal.kdbx', mode: { '.tag': 'add' }, autorename: false, strict_conflict: true })
     expect(options.body).toBe(file)
+  })
+
+  it('recovers a saved vault by refreshing when upload metadata is incomplete', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ name: 'Personal.kdbx' }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        entries: [{
+          '.tag': 'file',
+          id: 'id:recovered',
+          name: 'Personal.kdbx',
+          path_display: '/Personal.kdbx',
+          rev: 'recovered-rev',
+          size: 1234,
+          server_modified: '2026-09-10T00:00:00Z',
+        }],
+        cursor: 'done',
+        has_more: false,
+      }), { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const file = new File([new Uint8Array([1, 2, 3])], 'Personal.kdbx')
+
+    await expect(uploadNewDropboxVault(session, file)).resolves.toMatchObject({ id: 'id:recovered' })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
   it('reports a Dropbox name conflict without creating a copy', async () => {

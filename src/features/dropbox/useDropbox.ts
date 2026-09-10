@@ -73,9 +73,14 @@ export function useDropbox() {
 
   async function upload(file: File) {
     if (!session) throw new Error('Connect Dropbox before creating a vault.')
-    const vault = await uploadNewDropboxVault(session, file)
-    await loadLibrary(session)
-    return vault
+    try {
+      const vault = await uploadNewDropboxVault(session, file)
+      await loadLibrary(session)
+      return vault
+    } catch (uploadError) {
+      await loadLibrary(session)
+      throw uploadError
+    }
   }
 
   function disconnect() {
