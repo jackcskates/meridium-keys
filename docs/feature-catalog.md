@@ -32,6 +32,8 @@ future possibilities.
 - Drag entries between real folders or “No folder” with mouse or touch, with a
   keyboard-accessible Move entry dialog for the same operation. The Recycle Bin
   is not a valid drop destination.
+- List created folders before individually named unfiled entries and keep the
+  Recycle Bin docked at the bottom of the navigator.
 
 **Proposed:**
 

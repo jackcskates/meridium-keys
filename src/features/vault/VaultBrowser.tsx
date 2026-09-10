@@ -114,18 +114,19 @@ function MoveEntryDialog({ entry, vault, isMoving, error, onCancel, onMove }: {
 }
 
 export function VaultBrowser({ vault, canEdit, onDeleteEntry, onDeleteGroup, onLoadEntry, onLock, onMoveEntry, onSaveEntry, onSaveGroup }: VaultBrowserProps) {
-  const [selectedGroupId, setSelectedGroupId] = useState('all')
   const activeEntries = useMemo(() => vault.entries.filter((entry) => !entry.isDeleted), [vault.entries])
+  const unfiledEntries = useMemo(() => activeEntries.filter((entry) => entry.groupId === vault.rootGroupId), [activeEntries, vault.rootGroupId])
+  const activeGroups = useMemo(() => vault.groups.filter((group) => !group.isRecycleBin), [vault.groups])
+  const recycleBin = vault.groups.find((group) => group.isRecycleBin && group.parentGroupId === vault.rootGroupId)
+  const [selectedGroupId, setSelectedGroupId] = useState(vault.rootGroupId)
   const selectedGroup = vault.groups.find((group) => group.id === selectedGroupId)
   const selectedGroupIsRecycleRoot = selectedGroup?.isRecycleBin && selectedGroup.parentGroupId === vault.rootGroupId
   const visibleEntries = useMemo(() => {
-    if (selectedGroupId === 'all') return activeEntries
-    if (selectedGroupId === vault.rootGroupId) return activeEntries.filter((entry) => entry.groupId === vault.rootGroupId)
+    if (selectedGroupId === vault.rootGroupId) return unfiledEntries
     if (selectedGroup?.isRecycleBin) return selectedGroupIsRecycleRoot ? vault.entries.filter((entry) => entry.isDeleted) : vault.entries.filter((entry) => entry.groupId === selectedGroupId)
     return activeEntries.filter((entry) => entry.groupId === selectedGroupId)
-  }, [activeEntries, selectedGroup, selectedGroupId, selectedGroupIsRecycleRoot, vault.entries, vault.rootGroupId])
-  const rootEntryCount = activeEntries.filter((entry) => entry.groupId === vault.rootGroupId).length
-  const [selectedEntryId, setSelectedEntryId] = useState(activeEntries[0]?.id ?? '')
+  }, [activeEntries, selectedGroup, selectedGroupId, selectedGroupIsRecycleRoot, unfiledEntries, vault.entries, vault.rootGroupId])
+  const [selectedEntryId, setSelectedEntryId] = useState(unfiledEntries[0]?.id ?? '')
   const selectedEntry = visibleEntries.find((entry) => entry.id === selectedEntryId) ?? visibleEntries[0]
   const [choosingType, setChoosingType] = useState(false)
   const [draft, setDraft] = useState<VaultEntryDraft | null>(null)
@@ -160,8 +161,14 @@ export function VaultBrowser({ vault, canEdit, onDeleteEntry, onDeleteGroup, onL
     setSelectedGroupId(groupId)
     const group = vault.groups.find((candidate) => candidate.id === groupId)
     const isRecycleRoot = group?.isRecycleBin && group.parentGroupId === vault.rootGroupId
-    const firstEntry = groupId === 'all' ? activeEntries[0] : groupId === vault.rootGroupId ? activeEntries.find((entry) => entry.groupId === vault.rootGroupId) : vault.entries.find((entry) => entry.groupId === groupId || (isRecycleRoot && entry.isDeleted))
+    const firstEntry = groupId === vault.rootGroupId ? unfiledEntries[0] : vault.entries.find((entry) => entry.groupId === groupId || (isRecycleRoot && entry.isDeleted))
     setSelectedEntryId(firstEntry?.id ?? '')
+    resetEntryEditor()
+  }
+
+  function selectUnfiledEntry(entryId: string) {
+    setSelectedGroupId(vault.rootGroupId)
+    setSelectedEntryId(entryId)
     resetEntryEditor()
   }
 
@@ -173,7 +180,7 @@ export function VaultBrowser({ vault, canEdit, onDeleteEntry, onDeleteGroup, onL
   }
 
   function chooseType(type: VaultEntryDraft['type']) {
-    const groupId = selectedGroupId !== 'all' && !selectedGroup?.isRecycleBin ? selectedGroupId : vault.rootGroupId
+    const groupId = !selectedGroup?.isRecycleBin ? selectedGroupId : vault.rootGroupId
     setDraft(createEmptyEntryDraft(type, groupId))
     setChoosingType(false)
   }
@@ -244,7 +251,7 @@ export function VaultBrowser({ vault, canEdit, onDeleteEntry, onDeleteGroup, onL
     setGroupError('')
     try {
       await onDeleteGroup(groupToDelete.id)
-      setSelectedGroupId('all')
+      setSelectedGroupId(vault.rootGroupId)
       setSelectedEntryId('')
       setGroupToDelete(null)
       resetEntryEditor()
@@ -256,7 +263,7 @@ export function VaultBrowser({ vault, canEdit, onDeleteEntry, onDeleteGroup, onL
   }
 
   function folderLabel(groupId: string) {
-    return groupId === vault.rootGroupId ? 'No folder' : vault.groups.find((group) => group.id === groupId)?.name || 'folder'
+    return groupId === vault.rootGroupId ? 'outside folders' : vault.groups.find((group) => group.id === groupId)?.name || 'folder'
   }
 
   function canDropEntry(entryId: string, groupId: string) {
@@ -347,7 +354,7 @@ export function VaultBrowser({ vault, canEdit, onDeleteEntry, onDeleteGroup, onL
     else setMoveStatus('Move canceled. Drop entries on No folder or another folder.')
   }
 
-  function finishNativeDrop(event: ReactDragEvent<HTMLButtonElement>, groupId: string) {
+  function finishNativeDrop(event: ReactDragEvent<HTMLElement>, groupId: string) {
     event.preventDefault()
     const entryId = event.dataTransfer.getData(entryDragMime) || nativeDragEntryIdRef.current || draggedEntryId
     const canMove = canDropEntry(entryId, groupId)
@@ -364,27 +371,43 @@ export function VaultBrowser({ vault, canEdit, onDeleteEntry, onDeleteGroup, onL
     <div className="vault-browser-grid">
       <aside className="group-list" aria-label="Vault folders">
         <div className="panel-heading"><h2>Folders</h2>{canEdit && <button aria-label="Create folder" className="panel-action" onClick={() => { setGroupError(''); setGroupDialog('new') }} type="button">+</button>}</div>
-        <button className={selectedGroupId === 'all' ? 'is-selected' : ''} onClick={() => selectGroup('all')} type="button"><span>All entries</span><small>{activeEntries.length}</small></button>
-        <button
-          className={`${selectedGroupId === vault.rootGroupId ? 'is-selected' : ''} ${dropTargetGroupId === vault.rootGroupId ? 'is-drop-target' : ''}`}
-          data-folder-id={vault.rootGroupId}
-          onClick={() => selectGroup(vault.rootGroupId)}
-          onDragOver={(event) => { const entryId = nativeDragEntryIdRef.current || draggedEntryId; if (canDropEntry(entryId, vault.rootGroupId)) { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; setDropTargetGroupId(vault.rootGroupId) } }}
-          onDrop={(event) => finishNativeDrop(event, vault.rootGroupId)}
+        <div className="group-list-scroll">
+          <div className="folder-items">
+            {activeGroups.map((group) => <button
+              className={`group-nav-button ${selectedGroupId === group.id ? 'is-selected' : ''} ${dropTargetGroupId === group.id ? 'is-drop-target' : ''}`}
+              data-folder-id={group.id}
+              key={group.id}
+              onClick={() => selectGroup(group.id)}
+              onDragOver={(event) => { const entryId = nativeDragEntryIdRef.current || draggedEntryId; if (canDropEntry(entryId, group.id)) { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; setDropTargetGroupId(group.id) } }}
+              onDrop={(event) => finishNativeDrop(event, group.id)}
+              style={{ paddingInlineStart: `${10 + group.depth * 12}px` }}
+              title={group.path}
+              type="button"
+            ><span>{group.name}</span><small>{group.entryCount}</small></button>)}
+          </div>
+          <div
+            aria-label="Entries not in a folder"
+            className={`unfiled-entry-list ${dropTargetGroupId === vault.rootGroupId ? 'is-drop-target' : ''}`}
+            data-folder-id={vault.rootGroupId}
+            onDragOver={(event) => { const entryId = nativeDragEntryIdRef.current || draggedEntryId; if (canDropEntry(entryId, vault.rootGroupId)) { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; setDropTargetGroupId(vault.rootGroupId) } }}
+            onDrop={(event) => finishNativeDrop(event, vault.rootGroupId)}
+          >
+            {unfiledEntries.map((entry) => <button
+              className={selectedGroupId === vault.rootGroupId && selectedEntryId === entry.id ? 'is-selected' : ''}
+              key={entry.id}
+              onClick={() => selectUnfiledEntry(entry.id)}
+              type="button"
+            ><span className="unfiled-entry-mark" aria-hidden="true">{getEntryTypeDefinition(entry.type).glyph}</span><span>{entry.title}</span></button>)}
+            {!unfiledEntries.length && <p>{draggedEntryId ? 'Drop here to remove from folder' : 'No entries outside folders'}</p>}
+          </div>
+          {canEdit && selectedGroup && !selectedGroup.isRecycleBin && <div className="group-actions"><button onClick={() => { setGroupError(''); setGroupDialog(selectedGroup) }} type="button">Rename</button><button className="is-danger" onClick={() => { setGroupError(''); setGroupToDelete(selectedGroup) }} type="button">Delete</button></div>}
+        </div>
+        {recycleBin && <div className="recycle-bin-dock"><button
+          className={`group-nav-button ${selectedGroupId === recycleBin.id ? 'is-selected' : ''}`}
+          onClick={() => selectGroup(recycleBin.id)}
+          title={recycleBin.path}
           type="button"
-        ><span>No folder</span><small>{rootEntryCount}</small></button>
-        {vault.groups.map((group) => <button
-          className={`${selectedGroupId === group.id ? 'is-selected' : ''} ${dropTargetGroupId === group.id ? 'is-drop-target' : ''}`}
-          data-folder-id={group.isRecycleBin ? undefined : group.id}
-          key={group.id}
-          onClick={() => selectGroup(group.id)}
-          onDragOver={(event) => { const entryId = nativeDragEntryIdRef.current || draggedEntryId; if (canDropEntry(entryId, group.id)) { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; setDropTargetGroupId(group.id) } }}
-          onDrop={(event) => finishNativeDrop(event, group.id)}
-          style={{ paddingInlineStart: `${12 + group.depth * 12}px` }}
-          title={group.path}
-          type="button"
-        ><span>{group.name}</span><small>{group.entryCount}</small></button>)}
-        {canEdit && selectedGroup && !selectedGroup.isRecycleBin && <div className="group-actions"><button onClick={() => { setGroupError(''); setGroupDialog(selectedGroup) }} type="button">Rename</button><button className="is-danger" onClick={() => { setGroupError(''); setGroupToDelete(selectedGroup) }} type="button">Delete</button></div>}
+        ><span>Recycle Bin</span><small>{recycleBin.entryCount}</small></button></div>}
       </aside>
       <section className="entry-list" aria-label="Vault entries">
         <h2>Entries</h2>

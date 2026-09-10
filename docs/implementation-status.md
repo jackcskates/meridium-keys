@@ -51,6 +51,9 @@ Last verified: 2026-09-10.
 - Move entries between real KDBX folders or back to “No folder” by dragging the
   dedicated handle with a mouse or touch pointer. A Move entry dialog provides
   the equivalent keyboard-accessible action. Recycle Bin is never a move target.
+- Folder navigation lists created folders first, followed by each entry stored
+  outside a folder by name. The unfiled-entry area accepts drops, while Recycle
+  Bin remains docked to the bottom when the folder list scrolls.
 - Revision-safe Dropbox updates: an edit is uploaded only over the revision that
   was opened, and the in-memory worker commits it only after Dropbox confirms.
 - Explicit connected, connecting, loading, empty, error, and session-disconnect states.
@@ -112,6 +115,10 @@ Last verified: 2026-09-10.
   2026-09-10: a root Note entry was dragged by its handle into another folder,
   the folder counts and selected-entry metadata updated after the Dropbox save,
   and the test vault was removed afterward. Development remained untouched.
+- A third disposable vault verified the reverse interaction and navigator layout:
+  a Note was created in References, dragged into the unfiled-entry area, rendered
+  by name beneath References, and left Recycle Bin docked at the panel bottom.
+  The test vault was removed and Development remained untouched.
 
 ## Current dependencies for vault reading
 

@@ -153,7 +153,7 @@ they never existed; mark them superseded and link to the replacement.
 
 ### D-024 - KDBX root and folder lifecycle
 
-- **Status:** Accepted
+- **Status:** Accepted; navigator presentation amended by D-027
 - **Decision:** Present root entries as “No folder” and do not show the vault's
   root group as a duplicate same-named folder. Support create, rename, and delete
   for real KDBX folders. Deleting a non-empty folder uses the standard KDBX
@@ -183,6 +183,17 @@ they never existed; mark them superseded and link to the replacement.
   row selection and drag into one ambiguous gesture. The worker performs the
   KDBX move and the existing expected-revision upload protects the remote file
   from silent concurrent overwrites.
+
+### D-027 - Folder navigator content order
+
+- **Status:** Accepted
+- **Decision:** Show created folders first, then individually named entries that
+  live directly in the KDBX root. The unfiled-entry area is a root drop target.
+  Keep Recycle Bin outside the scrolling list and docked to the panel bottom.
+  Remove the generic “All entries” and “No folder” navigation rows.
+- **Reason:** The navigator should expose the actual organization rather than
+  two aggregate abstractions, while keeping destructive content consistently
+  separated and reachable as the folder list grows.
 
 ## Open
 

@@ -59,9 +59,13 @@ for careful credential work, with lock and sync status always explicit.
   expand arrow competes for rail space. Rail icons share one center line and
   comparable optical size.
 - The main workspace belongs to the selected vault.
-- The folder navigator represents the KDBX root as “No folder.” It never repeats
-  the vault name as an artificial folder. Users can create, rename, and delete
-  real KDBX folders, including folders containing entries.
+- The folder navigator never repeats the vault name as an artificial folder.
+  It lists created folders first, then names each entry stored directly in the
+  KDBX root instead of adding generic “All entries” or “No folder” rows. That
+  unfiled-entry area remains a drop target even when empty. Recycle Bin is
+  docked to the bottom while the folder and unfiled lists scroll above it.
+- Users can create, rename, and delete real KDBX folders, including folders
+  containing entries.
 - Entry rows use a dedicated 44-pixel drag handle so opening an entry and moving
   it remain distinct actions. Valid folder targets receive a restrained green
   outline during a drag; Recycle Bin does not advertise itself as a target. The
