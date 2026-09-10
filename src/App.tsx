@@ -273,10 +273,12 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
     (vault) => vault.pathDisplay.localeCompare(`/${proposedVaultFileName}`, undefined, { sensitivity: 'accent' }) === 0,
   )
   const createIsValid = Boolean(proposedVaultFileName) && passwordReady && !vaultNameTaken
+  const profileName = dropbox.session?.accountName || 'Jack Skates'
+  const profileInitials = profileName.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join('') || 'JS'
   const workspaceTitle = activeView === 'connect'
     ? 'Connect storage'
     : activeView === 'vaults'
-      ? 'All vaults'
+      ? 'Home'
       : activeView === 'create'
         ? 'Create vault'
         : selectedFile.replace(/\.kdbx$/i, '') || 'Unlock vault'
@@ -515,15 +517,15 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
           <button
             className={`sidebar-row sidebar-row-all ${activeView === 'vaults' || activeView === 'create' ? 'is-active' : ''}`}
             onClick={() => setView(dropboxConnected ? 'vaults' : 'connect')}
-            title="All vaults"
+            title="Home"
             type="button"
           >
             <span className="sidebar-row-icon"><Icon name="key" /></span>
-            <span className="sidebar-row-copy"><strong>All vaults</strong><small>{totalVaults ? `${totalVaults} ${totalVaults === 1 ? 'vault' : 'vaults'}` : 'No vaults'}</small></span>
+            <span className="sidebar-row-copy"><strong>Home</strong><small>{totalVaults ? `${totalVaults} ${totalVaults === 1 ? 'vault' : 'vaults'}` : 'No vaults'}</small></span>
           </button>
 
           <div className="sidebar-section">
-            <div className="sidebar-section-label"><span>On this device</span><Icon name="file" size={16} /></div>
+            <div className="sidebar-section-label"><span>On this device</span></div>
             {selectedFile && selectedStorage === 'device' ? (
               <button className={`sidebar-row vault-row ${activeView === 'unlock' || activeView === 'browse' ? 'is-active' : ''}`} onClick={() => setView(vaultSnapshot ? 'browse' : 'unlock')} title={selectedFile} type="button">
                 <span className="vault-avatar">{selectedFile.slice(0, 1).toUpperCase()}<span className="vault-lock"><Icon name={vaultSnapshot ? 'check' : 'lock'} size={11} /></span></span>
@@ -535,7 +537,7 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
           </div>
 
           <div className="sidebar-section">
-            <div className="sidebar-section-label"><span>On Dropbox</span><Icon name="cloud" size={16} /></div>
+            <div className="sidebar-section-label"><span>On Dropbox</span></div>
             {dropbox.vaults.map((vault) => (
               <button
                 className={`sidebar-row vault-row ${activeDropboxVaultId === vault.id && (activeView === 'unlock' || activeView === 'browse') ? 'is-active' : ''}`}
@@ -557,10 +559,17 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
           </div>
         </nav>
 
-        <button className="sidebar-connection" disabled={!pwa.isOnline} onClick={() => dropboxConnected ? setView('vaults') : void dropbox.connect()} title={!pwa.isOnline ? 'Device is offline' : dropboxConnected ? 'Dropbox ready' : 'Dropbox disconnected'} type="button">
-          <span className={`status-dot ${pwa.isOnline && dropboxConnected ? 'is-ready' : ''}`} />
-          <span className="sidebar-row-copy"><strong>Dropbox</strong><small>{!pwa.isOnline ? 'Offline' : dropbox.status === 'connecting' || dropbox.status === 'loading' ? 'Connecting' : dropboxConnected ? 'Ready' : dropbox.status === 'error' ? 'Needs attention' : 'Disconnected'}</small></span>
-        </button>
+        <div className="sidebar-footer">
+          <button className="sidebar-connection" disabled={!pwa.isOnline} onClick={() => dropboxConnected ? setView('vaults') : void dropbox.connect()} title={!pwa.isOnline ? 'Device is offline' : dropboxConnected ? 'Dropbox ready' : 'Dropbox disconnected'} type="button">
+            <span className={`status-dot ${pwa.isOnline && dropboxConnected ? 'is-ready' : ''}`} />
+            <span className="sidebar-row-copy"><strong>Dropbox</strong><small>{!pwa.isOnline ? 'Offline' : dropbox.status === 'connecting' || dropbox.status === 'loading' ? 'Connecting' : dropboxConnected ? 'Ready' : dropbox.status === 'error' ? 'Needs attention' : 'Disconnected'}</small></span>
+          </button>
+          <button className="sidebar-sign-out" onClick={() => { vaultSessionRef.current?.close(); vaultSessionRef.current = null; dropbox.disconnect(); onLockApp() }} type="button">Sign out</button>
+          <div className="sidebar-profile" title={profileName}>
+            <span className="profile-avatar">{profileInitials}</span>
+            <span className="sidebar-row-copy"><strong>{profileName}</strong><small>User profile</small></span>
+          </div>
+        </div>
       </aside>
 
       <main className="workspace">
@@ -601,7 +610,6 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
                   <h1>Choose where to begin</h1>
                   <p>Open an encrypted vault or create a new one in your Dropbox folder.</p>
                 </div>
-                <span className="secure-pill"><Icon name="check" size={14} /> {dropbox.session?.accountName || 'Connected'}</span>
               </div>
 
               <div className="choice-grid">
@@ -648,7 +656,6 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
                   <button className="icon-button" aria-label="Check Dropbox again" disabled={dropbox.status === 'loading'} onClick={() => void dropbox.refresh()} title="Check Dropbox again" type="button"><Icon name="refresh" /></button>
                 </div>
               )}
-              <button className="text-button" onClick={() => { dropbox.disconnect(); setView('connect') }} type="button">Disconnect Dropbox for this session</button>
             </div>
           )}
 
@@ -665,7 +672,7 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
                 <label className="field">
                   <span>Vault name</span>
                   <input autoComplete="off" disabled={Boolean(createStage)} onChange={(event) => { setVaultName(event.target.value); setCreateError('') }} placeholder="Personal" required value={vaultName} />
-                  {vaultNameTaken && <small className="field-error">That vault already exists. Open it from All vaults or choose another name.</small>}
+                  {vaultNameTaken && <small className="field-error">That vault already exists. Open it from Home or choose another name.</small>}
                 </label>
                 <div
                   className="password-creation"

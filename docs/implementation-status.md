@@ -12,6 +12,8 @@ Last verified: 2026-09-10.
 - Temporary session App Lock with a slow PBKDF2 verifier and explicit Lock App
   action. The plaintext app password is not committed.
 - Responsive Meridium application frame with a collapsible vault sidebar.
+- Home navigation naming, icon-free storage section labels, explicit green
+  Dropbox-ready status, and a bottom placeholder profile/sign-out area.
 - Local `.kdbx` selection with extension and 64 MB size validation.
 - Read-only KDBX 4 unlock for password-protected Argon2id, Argon2d, and AES-KDF vaults.
 - Key derivation and KDBX parsing in a dedicated web worker.

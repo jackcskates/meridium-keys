@@ -185,7 +185,7 @@ export async function uploadNewDropboxVault(session: DropboxSession, file: File)
   if (!response.ok) {
     const details = await response.text()
     if (response.status === 409 && details.toLowerCase().includes('conflict')) {
-      throw new DropboxApiError(`A vault named ${file.name.replace(/\.kdbx$/i, '')} already exists. Open it from All vaults or choose another name.`)
+      throw new DropboxApiError(`A vault named ${file.name.replace(/\.kdbx$/i, '')} already exists. Open it from Home or choose another name.`)
     }
     throw new DropboxApiError(response.status === 401
       ? 'The Dropbox connection expired. Connect again.'

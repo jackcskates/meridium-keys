@@ -52,13 +52,16 @@ for careful credential work, with lock and sync status always explicit.
 **Confirmed direction:**
 
 - A collapsible left sidebar is the primary vault library. Expanded mode shows
-  “All vaults,” storage-provider sections, vault name and lock state, “New vault,”
+  “Home,” storage-provider sections, vault name and lock state, “New vault,”
   and Dropbox connection status. Collapsed mode preserves the same destinations
   as accessible icon controls.
 - In collapsed mode, the Meridium symbol is the expand control; no separate
   expand arrow competes for rail space. Rail icons share one center line and
   comparable optical size.
 - The main workspace belongs to the selected vault.
+- Storage section labels are text-only. The sidebar footer owns connection
+  status, Sign out, and the avatar/profile placeholder; connected and ready
+  states use the semantic green status dot with a text label.
 - Search is prominent after unlock.
 - Item results and item details use the remaining space responsively.
 
