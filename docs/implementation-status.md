@@ -47,6 +47,9 @@ Last verified: 2026-09-10.
   API Key, Identity, Membership, Crypto Wallet, and Serial Number entries.
   Each type supplies its own field set; standard fields and protected custom
   fields remain readable in compatible KeePass applications.
+- A right-side Generate action on service password fields creates a securely
+  randomized 20-character value with guaranteed uppercase, lowercase, number,
+  and compatibility-focused symbol characters.
 - Delete entries into the standard KDBX Recycle Bin with explicit confirmation.
 - Move entries between real KDBX folders or back to “No folder” by dragging the
   dedicated handle with a mouse or touch pointer. A Move entry dialog provides
@@ -119,6 +122,10 @@ Last verified: 2026-09-10.
   a Note was created in References, dragged into the unfiled-entry area, rendered
   by name beneath References, and left Recycle Bin docked at the panel bottom.
   The test vault was removed and Development remained untouched.
+- A fourth disposable Dropbox vault verified the password-generator UI and save
+  path: generate, reveal for character-class inspection, encrypted save,
+  lock/reopen, and protected-field presence after reopen. The test vault was
+  removed and Development remained untouched.
 
 ## Current dependencies for vault reading
 

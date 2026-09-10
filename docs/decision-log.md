@@ -195,6 +195,18 @@ they never existed; mark them superseded and link to the replacement.
   two aggregate abstractions, while keeping destructive content consistently
   separated and reachable as the folder list grows.
 
+### D-028 - Default service password generation
+
+- **Status:** Accepted
+- **Decision:** Generate 20-character service passwords using the browser
+  cryptographic random source. Every result contains uppercase, lowercase,
+  numeric, and symbol characters; symbols come from `!@#$%^&*()-_=+` for broad
+  service compatibility. Offer generation only for fields defined as Password,
+  not API keys, recovery material, identification numbers, or PINs.
+- **Reason:** Twenty characters provides strong entropy while fitting common
+  service limits. Restricting the action to actual passwords avoids silently
+  applying password assumptions to secrets with provider-defined formats.
+
 ## Open
 
 ### D-005 - Standard KDBX compatibility

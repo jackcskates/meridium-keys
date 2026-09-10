@@ -71,6 +71,9 @@ for careful credential work, with lock and sync status always explicit.
   outline during a drag; Recycle Bin does not advertise itself as a target. The
   detail pane also offers a labeled Move entry dialog for keyboard use and as a
   clear fallback on devices where dragging is awkward.
+- Service password inputs place a clearly labeled Generate action at the right
+  edge beside Show/Hide. Generation replaces only the unsaved password draft;
+  the user still explicitly saves or cancels the entry.
 - Storage section labels are text-only. The sidebar footer owns connection
   status, Sign out, and the avatar/profile placeholder; connected and ready
   states use the semantic green status dot with a text label.

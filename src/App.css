@@ -764,7 +764,7 @@ h1 {
 .secret-input { position: relative; }
 .secret-input input { padding-right: 48px; }
 
-.secret-input button {
+.secret-input > button {
   position: absolute;
   right: 6px;
   top: 5px;
@@ -779,7 +779,7 @@ h1 {
   cursor: pointer;
 }
 
-.secret-input button:hover, .secret-input button:focus-visible { color: var(--text-primary); background: var(--surface-hover); }
+.secret-input > button:hover, .secret-input > button:focus-visible { color: var(--text-primary); background: var(--surface-hover); }
 
 .password-creation {
   display: grid;
@@ -1356,7 +1356,45 @@ h1 {
 
 .entry-editor-heading h2 { margin: 3px 0 0; color: var(--text-primary); font-size: 1.15rem; }
 .entry-editor .secret-input input { padding-right: 58px; }
-.entry-editor .secret-input button { width: 48px; color: var(--text-secondary); font-size: 0.7rem; font-weight: 700; }
+.entry-editor .secret-input.has-generator input { padding-right: 145px; }
+.secret-input-actions {
+  position: absolute;
+  top: 5px;
+  right: 6px;
+  height: 37px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.entry-editor .secret-input-actions button {
+  width: 48px;
+  height: 37px;
+  padding: 0 7px;
+  display: grid;
+  place-items: center;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 0;
+  border-radius: 9px;
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.entry-editor .secret-input-actions button:hover,
+.entry-editor .secret-input-actions button:focus-visible {
+  color: var(--text-primary);
+  background: var(--surface-hover);
+}
+
+.entry-editor .secret-input-actions .password-generate {
+  width: auto;
+  min-width: 78px;
+  color: var(--brand-meridium);
+  background: var(--surface-3);
+}
 .entry-editor-actions,
 .entry-detail-actions { display: flex; align-items: center; gap: 8px; }
 .entry-editor-actions { justify-content: flex-end; }

@@ -102,6 +102,15 @@ KeePass applications without requiring a proprietary file format.
 - Change a secret.
 - Generate a password.
 
+**Implemented so far:**
+
+- Generate a 20-character service password from the password field's trailing
+  action using the browser cryptographic random source.
+- Guarantee at least one uppercase letter, lowercase letter, number, and symbol
+  while limiting symbols to a broadly accepted service-compatible set.
+- Keep generated values inside the unsaved editor draft until the user saves or
+  cancels the entry.
+
 **Proposed:**
 
 - Make reveal temporary and reset it when the item, vault, or tab loses focus.
