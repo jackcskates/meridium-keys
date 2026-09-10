@@ -68,8 +68,12 @@ for careful credential work, with lock and sync status always explicit.
   KDBX root instead of adding generic “All entries” or “No folder” rows. That
   unfiled-entry area remains a drop target even when empty. Recycle Bin is
   docked to the bottom while the folder and unfiled lists scroll above it.
-- Users can create, rename, and delete real KDBX folders, including folders
-  containing entries.
+- Folder Rename and Delete actions stay inside the affected folder's overflow
+  menu. Delete is visibly disabled while the folder contains entries or child
+  folders; users must empty it first.
+- Every typed entry uses a recognizable Lucide icon before its title. The same
+  type-to-icon mapping is reused in root entries, entry lists, the type picker,
+  and selected-entry details.
 - Entry rows use a dedicated 44-pixel drag handle so opening an entry and moving
   it remain distinct actions. Valid folder targets receive a restrained green
   outline during a drag; Recycle Bin does not advertise itself as a target. The

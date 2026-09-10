@@ -355,6 +355,9 @@ export async function prepareKdbxGroupDelete(database: Kdbx, groupId: string, fi
     if (group.uuid.toString() === root.uuid.toString() || group.uuid.toString() === recycleBinId) {
       throw new VaultOpenError('WORKER_FAILURE', 'That system folder cannot be deleted.')
     }
+    if (group.entries.length > 0 || group.groups.length > 0) {
+      throw new VaultOpenError('WORKER_FAILURE', 'Move or delete everything inside this folder before deleting it.')
+    }
     workingDatabase.remove(group)
     const data = await workingDatabase.save()
     return {

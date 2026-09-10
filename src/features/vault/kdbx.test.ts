@@ -186,15 +186,14 @@ describe('readKdbxSnapshot', () => {
     const database = await loadKdbxDatabase(original, fixturePassword)
     const originalSnapshot = await readKdbxSnapshot(original, fixturePassword)
     const existing = originalSnapshot.entries[0]
-    const parent = await prepareKdbxGroupSave(database, { parentGroupId: originalSnapshot.rootGroupId, name: 'Archived parent' }, 'fixture.kdbx')
-    const child = await prepareKdbxGroupSave(parent.database, { parentGroupId: parent.groupId, name: 'Archived child' }, 'fixture.kdbx')
-    const recycled = await prepareKdbxGroupDelete(child.database, parent.groupId, 'fixture.kdbx')
+    const child = await prepareKdbxGroupSave(database, { parentGroupId: originalSnapshot.rootGroupId, name: 'Archived child' }, 'fixture.kdbx')
+    const recycled = await prepareKdbxGroupDelete(child.database, child.groupId, 'fixture.kdbx')
 
     await expect(prepareKdbxEntryMove(recycled.database, existing.id, child.groupId, 'fixture.kdbx'))
       .rejects.toThrow('Entries cannot be dragged into the Recycle Bin.')
   })
 
-  it('creates, renames, and deletes a non-empty standard KDBX folder', async () => {
+  it('creates and renames a folder but requires it to be empty before deletion', async () => {
     const original = await createFixture(Consts.KdfId.Aes)
     let database = await loadKdbxDatabase(original, fixturePassword)
     const rootGroupId = database.getDefaultGroup().uuid.toString()
@@ -213,10 +212,25 @@ describe('readKdbxSnapshot', () => {
     const renamed = await prepareKdbxGroupSave(database, { id: created.groupId, parentGroupId: rootGroupId, name: 'Systems' }, 'fixture.kdbx')
     expect(renamed.vault.groups).toContainEqual(expect.objectContaining({ id: created.groupId, name: 'Systems', entryCount: 1 }))
 
-    const deleted = await prepareKdbxGroupDelete(renamed.database, created.groupId, 'fixture.kdbx')
+    await expect(prepareKdbxGroupDelete(renamed.database, created.groupId, 'fixture.kdbx'))
+      .rejects.toThrow('Move or delete everything inside this folder before deleting it.')
+
+    const emptied = await prepareKdbxEntryDelete(renamed.database, withEntry.entryId, 'fixture.kdbx')
+    const deleted = await prepareKdbxGroupDelete(emptied.database, created.groupId, 'fixture.kdbx')
     const recycledGroup = deleted.vault.groups.find((group) => group.id === created.groupId)
-    expect(recycledGroup).toMatchObject({ name: 'Systems', isRecycleBin: true, entryCount: 1 })
+    expect(recycledGroup).toMatchObject({ name: 'Systems', isRecycleBin: true, entryCount: 0 })
     expect(deleted.vault.entries.find((entry) => entry.title === 'Production DB')).toMatchObject({ isDeleted: true })
+  })
+
+  it('requires a folder to have no child folders before deletion', async () => {
+    const original = await createFixture(Consts.KdfId.Aes)
+    const database = await loadKdbxDatabase(original, fixturePassword)
+    const rootGroupId = database.getDefaultGroup().uuid.toString()
+    const parent = await prepareKdbxGroupSave(database, { parentGroupId: rootGroupId, name: 'Parent' }, 'fixture.kdbx')
+    const child = await prepareKdbxGroupSave(parent.database, { parentGroupId: parent.groupId, name: 'Child' }, 'fixture.kdbx')
+
+    await expect(prepareKdbxGroupDelete(child.database, parent.groupId, 'fixture.kdbx'))
+      .rejects.toThrow('Move or delete everything inside this folder before deleting it.')
   })
 
   it('round-trips every Meridium entry type through standard KDBX fields', async () => {

@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react'
+import { Ellipsis, Pencil, Trash2 } from 'lucide-react'
+import { EntryTypeIcon } from './EntryTypeIcon'
 import { createEmptyEntryDraft, entryTypeDefinitions, entryTypeLabel, getEntryTypeDefinition, type EntryFieldDefinition } from './entryTypes'
 import { generateServicePassword, generatedPasswordLength } from './passwordGenerator'
 import type { VaultEntryDetails, VaultEntryDraft, VaultEntrySummary, VaultGroupDraft, VaultGroupSummary, VaultSnapshot } from './types'
@@ -73,7 +75,7 @@ function DeleteGroupDialog({ group, isDeleting, error, onCancel, onDelete }: {
   onDelete: () => void
 }) {
   return <DialogShell describedBy="delete-group-description" labelledBy="delete-group-title" locked={isDeleting} onCancel={onCancel}><div className="confirm-dialog-card">
-    <div className="confirm-dialog-copy"><p className="eyebrow">Delete folder</p><h2 id="delete-group-title">Delete {group.name}?</h2><p id="delete-group-description">{group.entryCount ? `This folder and its ${group.entryCount} ${group.entryCount === 1 ? 'entry' : 'entries'} will move to the standard KDBX Recycle Bin.` : 'This folder will move to the standard KDBX Recycle Bin.'}</p></div>
+    <div className="confirm-dialog-copy"><p className="eyebrow">Delete folder</p><h2 id="delete-group-title">Delete {group.name}?</h2><p id="delete-group-description">This empty folder will move to the standard KDBX Recycle Bin.</p></div>
     {error && <p className="unlock-error" role="alert">{error}</p>}
     <div className="confirm-dialog-actions"><button className="button button-secondary" disabled={isDeleting} onClick={onCancel} type="button">Cancel</button><button className="button button-danger" disabled={isDeleting} onClick={onDelete} type="button">{isDeleting ? 'Deleting…' : `Delete ${group.name}`}</button></div>
   </div></DialogShell>
@@ -141,6 +143,7 @@ export function VaultBrowser({ vault, canEdit, onDeleteEntry, onDeleteGroup, onL
   const [deleteError, setDeleteError] = useState('')
   const [groupDialog, setGroupDialog] = useState<VaultGroupSummary | 'new' | null>(null)
   const [groupToDelete, setGroupToDelete] = useState<VaultGroupSummary | null>(null)
+  const [openGroupMenuId, setOpenGroupMenuId] = useState('')
   const [isSavingGroup, setIsSavingGroup] = useState(false)
   const [groupError, setGroupError] = useState('')
   const [draggedEntryId, setDraggedEntryId] = useState('')
@@ -151,6 +154,25 @@ export function VaultBrowser({ vault, canEdit, onDeleteEntry, onDeleteGroup, onL
   const [moveStatus, setMoveStatus] = useState('')
   const nativeDragEntryIdRef = useRef('')
   const pointerDragRef = useRef<{ pointerId: number; entryId: string; targetGroupId: string } | null>(null)
+  const groupMenuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!openGroupMenuId) return
+
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (!groupMenuRef.current?.contains(event.target as Node)) setOpenGroupMenuId('')
+    }
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpenGroupMenuId('')
+    }
+
+    document.addEventListener('pointerdown', closeOnOutsidePointer)
+    document.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsidePointer)
+      document.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [openGroupMenuId])
 
   function resetEntryEditor() {
     setDraft(null)
@@ -160,6 +182,7 @@ export function VaultBrowser({ vault, canEdit, onDeleteEntry, onDeleteGroup, onL
   }
 
   function selectGroup(groupId: string) {
+    setOpenGroupMenuId('')
     setSelectedGroupId(groupId)
     const group = vault.groups.find((candidate) => candidate.id === groupId)
     const isRecycleRoot = group?.isRecycleBin && group.parentGroupId === vault.rootGroupId
@@ -249,6 +272,11 @@ export function VaultBrowser({ vault, canEdit, onDeleteEntry, onDeleteGroup, onL
 
   async function deleteGroup() {
     if (!groupToDelete) return
+    if (groupToDelete.entryCount > 0 || activeGroups.some((group) => group.parentGroupId === groupToDelete.id)) {
+      setGroupError('Move or delete everything inside this folder before deleting it.')
+      setGroupToDelete(null)
+      return
+    }
     setIsSavingGroup(true)
     setGroupError('')
     try {
@@ -375,17 +403,36 @@ export function VaultBrowser({ vault, canEdit, onDeleteEntry, onDeleteGroup, onL
         <div className="panel-heading"><h2>Folders</h2>{canEdit && <button aria-label="Create folder" className="panel-action" onClick={() => { setGroupError(''); setGroupDialog('new') }} type="button">+</button>}</div>
         <div className="group-list-scroll">
           <div className="folder-items">
-            {activeGroups.map((group) => <button
-              className={`group-nav-button ${selectedGroupId === group.id ? 'is-selected' : ''} ${dropTargetGroupId === group.id ? 'is-drop-target' : ''}`}
-              data-folder-id={group.id}
-              key={group.id}
-              onClick={() => selectGroup(group.id)}
-              onDragOver={(event) => { const entryId = nativeDragEntryIdRef.current || draggedEntryId; if (canDropEntry(entryId, group.id)) { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; setDropTargetGroupId(group.id) } }}
-              onDrop={(event) => finishNativeDrop(event, group.id)}
-              style={{ paddingInlineStart: `${10 + group.depth * 12}px` }}
-              title={group.path}
-              type="button"
-            ><span>{group.name}</span><small>{group.entryCount}</small></button>)}
+            {activeGroups.map((group) => {
+              const isSelected = selectedGroupId === group.id
+              const isMenuOpen = openGroupMenuId === group.id
+              const hasContents = group.entryCount > 0 || activeGroups.some((candidate) => candidate.parentGroupId === group.id)
+              return <div className={`group-nav-item ${isSelected ? 'is-selected' : ''} ${isMenuOpen ? 'is-menu-open' : ''}`} key={group.id} ref={isMenuOpen ? groupMenuRef : undefined}>
+                <button
+                  className={`group-nav-button ${isSelected ? 'is-selected' : ''} ${dropTargetGroupId === group.id ? 'is-drop-target' : ''}`}
+                  data-folder-id={group.id}
+                  onClick={() => selectGroup(group.id)}
+                  onDragOver={(event) => { const entryId = nativeDragEntryIdRef.current || draggedEntryId; if (canDropEntry(entryId, group.id)) { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; setDropTargetGroupId(group.id) } }}
+                  onDrop={(event) => finishNativeDrop(event, group.id)}
+                  style={{ paddingInlineStart: `${10 + group.depth * 12}px` }}
+                  title={group.path}
+                  type="button"
+                ><span>{group.name}</span><small>{group.entryCount}</small></button>
+                {canEdit && <button
+                  aria-expanded={isMenuOpen}
+                  aria-haspopup="menu"
+                  aria-label={`Folder actions for ${group.name}`}
+                  className="group-menu-trigger"
+                  onClick={() => setOpenGroupMenuId(isMenuOpen ? '' : group.id)}
+                  title={`Folder actions for ${group.name}`}
+                  type="button"
+                ><Ellipsis aria-hidden="true" size={18} /></button>}
+                {isMenuOpen && <div aria-label={`${group.name} folder actions`} className="group-overflow-menu" role="menu">
+                  <button onClick={() => { setOpenGroupMenuId(''); setGroupError(''); setGroupDialog(group) }} role="menuitem" type="button"><Pencil aria-hidden="true" size={16} />Rename</button>
+                  <button aria-label={hasContents ? `Delete ${group.name}, unavailable because the folder is not empty` : `Delete ${group.name}`} className="is-danger" disabled={hasContents} onClick={() => { setOpenGroupMenuId(''); setGroupError(''); setGroupToDelete(group) }} role="menuitem" title={hasContents ? 'Move or delete everything inside this folder first.' : `Delete ${group.name}`} type="button"><Trash2 aria-hidden="true" size={16} />Delete</button>
+                </div>}
+              </div>
+            })}
           </div>
           <div
             aria-label="Entries not in a folder"
@@ -399,10 +446,9 @@ export function VaultBrowser({ vault, canEdit, onDeleteEntry, onDeleteGroup, onL
               key={entry.id}
               onClick={() => selectUnfiledEntry(entry.id)}
               type="button"
-            ><span className="unfiled-entry-mark" aria-hidden="true">{getEntryTypeDefinition(entry.type).glyph}</span><span>{entry.title}</span></button>)}
+            ><span className="unfiled-entry-mark"><EntryTypeIcon type={entry.type} /></span><span>{entry.title}</span></button>)}
             {!unfiledEntries.length && <p>{draggedEntryId ? 'Drop here to remove from folder' : 'No entries outside folders'}</p>}
           </div>
-          {canEdit && selectedGroup && !selectedGroup.isRecycleBin && <div className="group-actions"><button onClick={() => { setGroupError(''); setGroupDialog(selectedGroup) }} type="button">Rename</button><button className="is-danger" onClick={() => { setGroupError(''); setGroupToDelete(selectedGroup) }} type="button">Delete</button></div>}
         </div>
         {recycleBin && <div className="recycle-bin-dock"><button
           className={`group-nav-button ${selectedGroupId === recycleBin.id ? 'is-selected' : ''}`}
@@ -425,7 +471,7 @@ export function VaultBrowser({ vault, canEdit, onDeleteEntry, onDeleteGroup, onL
             onDragEnd={() => { const wasActive = Boolean(nativeDragEntryIdRef.current); clearDragState(); if (wasActive && !isMovingEntry) setMoveStatus('Move canceled. Drop entries on No folder or another folder.') }}
             onDragStart={(event) => beginNativeDrag(event, entry)}
             type="button"
-          ><span className="entry-glyph">{getEntryTypeDefinition(entry.type).glyph}</span><span><strong>{entry.title}</strong><small>{entry.subtitle}</small></span></button>
+          ><span className="entry-glyph"><EntryTypeIcon type={entry.type} /></span><span><strong>{entry.title}</strong><small>{entry.subtitle}</small></span></button>
           {canEdit && !entry.isDeleted && <button
             aria-label={`Drag ${entry.title} to a folder`}
             className="entry-drag-handle"
@@ -440,13 +486,13 @@ export function VaultBrowser({ vault, canEdit, onDeleteEntry, onDeleteGroup, onL
         </div>) : <p className="vault-empty-state">No entries here.</p>}
       </section>
       <section className="entry-detail" aria-label="Selected entry">
-        {choosingType ? <div className="entry-type-picker"><div className="entry-editor-heading"><div><p className="eyebrow">New entry</p><h2>Choose a type</h2></div></div><p className="type-picker-copy">The type controls which fields appear in the entry.</p><div className="entry-type-grid">{entryTypeDefinitions.map((type) => <button key={type.id} onClick={() => chooseType(type.id)} type="button"><span className="entry-glyph">{type.glyph}</span><span><strong>{type.label}</strong><small>{type.description}</small></span></button>)}</div><button className="text-button" onClick={resetEntryEditor} type="button">Cancel</button></div> : draft && definition ? <form className="entry-editor" onSubmit={saveEntry}>
+        {choosingType ? <div className="entry-type-picker"><div className="entry-editor-heading"><div><p className="eyebrow">New entry</p><h2>Choose a type</h2></div></div><p className="type-picker-copy">The type controls which fields appear in the entry.</p><div className="entry-type-grid">{entryTypeDefinitions.map((type) => <button key={type.id} onClick={() => chooseType(type.id)} type="button"><span className="entry-glyph"><EntryTypeIcon type={type.id} /></span><span><strong>{type.label}</strong><small>{type.description}</small></span></button>)}</div><button className="text-button" onClick={resetEntryEditor} type="button">Cancel</button></div> : draft && definition ? <form className="entry-editor" onSubmit={saveEntry}>
           <div className="entry-editor-heading"><div><p className="eyebrow">{draft.id ? `Edit ${definition.label}` : `New ${definition.label}`}</p><h2>{draft.id ? draft.title || `Untitled ${definition.label}` : `Add ${definition.label}`}</h2></div>{!draft.id && <button className="text-button" onClick={() => { setDraft(null); setChoosingType(true) }} type="button">Change type</button>}</div>
           <label className="field"><span>Name</span><input autoFocus autoComplete="off" disabled={isSaving} onChange={(event) => setDraft({ ...draft, title: event.target.value })} required value={draft.title} /></label>
           <label className="field"><span>Folder</span><select disabled={isSaving} onChange={(event) => setDraft({ ...draft, groupId: event.target.value })} value={draft.groupId}><option value={vault.rootGroupId}>No folder</option>{vault.groups.filter((group) => !group.isRecycleBin).map((group) => <option key={group.id} value={group.id}>{group.path}</option>)}</select></label>
           {definition.fields.map((field) => <EntryField disabled={isSaving} field={field} key={field.key} onChange={(value) => setDraft({ ...draft, fields: { ...draft.fields, [field.key]: value } })} onGenerate={field.key === 'password' ? () => setDraft({ ...draft, fields: { ...draft.fields, [field.key]: generateServicePassword() } }) : undefined} onToggle={() => setVisibleSecrets((current) => { const next = new Set(current); if (next.has(field.key)) next.delete(field.key); else next.add(field.key); return next })} value={draft.fields[field.key] || ''} visible={visibleSecrets.has(field.key)} />)}
           {saveError && <p className="unlock-error" role="alert">{saveError}</p>}<div className="entry-editor-actions"><button className="button button-secondary" disabled={isSaving} onClick={resetEntryEditor} type="button">Cancel</button><button className="button button-primary" disabled={isSaving} type="submit">{isSaving ? 'Encrypting and saving…' : 'Save entry'}</button></div>
-        </form> : selectedEntry ? <><div className="entry-detail-heading"><span className="entry-glyph entry-glyph-large">{getEntryTypeDefinition(selectedEntry.type).glyph}</span><div><p className="eyebrow">{selectedEntry.isDeleted ? 'Recycle Bin' : entryTypeLabel(selectedEntry.type)}</p><h2>{selectedEntry.title}</h2></div></div><dl><div><dt>Type</dt><dd>{entryTypeLabel(selectedEntry.type)}</dd></div><div><dt>Folder</dt><dd>{selectedEntry.groupId === vault.rootGroupId ? 'No folder' : vault.groups.find((group) => group.id === selectedEntry.groupId)?.path || '—'}</dd></div>{selectedEntry.username && <div><dt>Username</dt><dd>{selectedEntry.username}</dd></div>}{selectedEntry.url && <div><dt>Website</dt><dd>{selectedEntry.url}</dd></div>}{selectedEntry.hasPassword && <div><dt>Protected fields</dt><dd className="masked-secret">••••••••••••</dd></div>}</dl>{saveError && <p className="unlock-error" role="alert">{saveError}</p>}{moveError && <p className="unlock-error" role="alert">{moveError}</p>}{!selectedEntry.isDeleted && canEdit && <div className="entry-detail-actions"><button className="button button-secondary" disabled={isLoadingEntry || isMovingEntry} onClick={() => void beginEdit(selectedEntry)} type="button">{isLoadingEntry ? 'Preparing…' : 'Edit entry'}</button><button className="text-button" disabled={isMovingEntry || (selectedEntry.groupId === vault.rootGroupId && vault.groups.every((group) => group.isRecycleBin))} onClick={() => { setMoveError(''); setEntryToMove(selectedEntry) }} type="button">Move entry</button><button className="text-button text-button-danger" disabled={isMovingEntry} onClick={() => { setDeleteError(''); setEntryToDelete(selectedEntry) }} type="button">Delete entry</button></div>}<p className="read-only-note">Protected values are revealed only inside the editor while this vault is unlocked.</p></> : <p className="vault-empty-state">Choose an entry or add a new one.</p>}
+        </form> : selectedEntry ? <><div className="entry-detail-heading"><span className="entry-glyph entry-glyph-large"><EntryTypeIcon size={21} type={selectedEntry.type} /></span><div><p className="eyebrow">{selectedEntry.isDeleted ? 'Recycle Bin' : entryTypeLabel(selectedEntry.type)}</p><h2>{selectedEntry.title}</h2></div></div><dl><div><dt>Type</dt><dd>{entryTypeLabel(selectedEntry.type)}</dd></div><div><dt>Folder</dt><dd>{selectedEntry.groupId === vault.rootGroupId ? 'No folder' : vault.groups.find((group) => group.id === selectedEntry.groupId)?.path || '—'}</dd></div>{selectedEntry.username && <div><dt>Username</dt><dd>{selectedEntry.username}</dd></div>}{selectedEntry.url && <div><dt>Website</dt><dd>{selectedEntry.url}</dd></div>}{selectedEntry.hasPassword && <div><dt>Protected fields</dt><dd className="masked-secret">••••••••••••</dd></div>}</dl>{saveError && <p className="unlock-error" role="alert">{saveError}</p>}{moveError && <p className="unlock-error" role="alert">{moveError}</p>}{!selectedEntry.isDeleted && canEdit && <div className="entry-detail-actions"><button className="button button-secondary" disabled={isLoadingEntry || isMovingEntry} onClick={() => void beginEdit(selectedEntry)} type="button">{isLoadingEntry ? 'Preparing…' : 'Edit entry'}</button><button className="text-button" disabled={isMovingEntry || (selectedEntry.groupId === vault.rootGroupId && vault.groups.every((group) => group.isRecycleBin))} onClick={() => { setMoveError(''); setEntryToMove(selectedEntry) }} type="button">Move entry</button><button className="text-button text-button-danger" disabled={isMovingEntry} onClick={() => { setDeleteError(''); setEntryToDelete(selectedEntry) }} type="button">Delete entry</button></div>}<p className="read-only-note">Protected values are revealed only inside the editor while this vault is unlocked.</p></> : <p className="vault-empty-state">Choose an entry or add a new one.</p>}
       </section>
     </div>
     {entryToDelete && <DeleteEntryDialog entry={entryToDelete} error={deleteError} isDeleting={isDeleting} onCancel={() => { if (!isDeleting) { setDeleteError(''); setEntryToDelete(null) } }} onDelete={() => void deleteEntry()} />}

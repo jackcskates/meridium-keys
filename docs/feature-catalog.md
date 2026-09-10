@@ -24,10 +24,11 @@ future possibilities.
 - Mask password presence and explicitly relock the vault.
 - Keep decryption and key derivation in a dedicated worker.
 - Remove a Dropbox vault without unlocking it, after a named confirmation.
-- Create, rename, and delete folders, including non-empty folders, using standard
-  KDBX recycle behavior.
+- Create and rename folders. Delete only empty folders through the folder's
+  overflow menu, using standard KDBX recycle behavior.
 - Keep entries directly in the vault root through the explicit “No folder” choice.
 - Create and edit all ten confirmed entry types through type-specific forms.
+- Identify every entry type with its own Lucide icon before the entry title.
 - Delete entries into the standard KDBX Recycle Bin.
 - Drag entries between real folders or “No folder” with mouse or touch, with a
   keyboard-accessible Move entry dialog for the same operation. The Recycle Bin

@@ -54,13 +54,16 @@ Last verified: 2026-09-10.
   requirements, confirmation matching, and duplicate vault-name detection.
 - Vault removal from the Dropbox library without opening the vault or knowing
   its master password, with a named destructive confirmation and revision check.
-- Create, rename, and delete KDBX folders while a Dropbox vault is unlocked.
-  Deleting a non-empty folder moves the folder and its contents to the standard
-  KDBX Recycle Bin.
+- Create and rename KDBX folders while a Dropbox vault is unlocked. Folder
+  actions live in a per-folder overflow menu. Delete is disabled and rejected
+  when the folder contains entries or child folders; empty folders move to the
+  standard KDBX Recycle Bin.
 - Type-first create and edit flows for Note, Login, Account, Database, Password,
   API Key, Identity, Membership, Crypto Wallet, and Serial Number entries.
   Each type supplies its own field set; standard fields and protected custom
-  fields remain readable in compatible KeePass applications.
+  fields remain readable in compatible KeePass applications. Lucide type icons
+  precede entry titles in the folder navigator, entry list, type picker, and
+  selected-entry header.
 - A right-side Generate action on service password fields creates a securely
   randomized 20-character value with guaranteed uppercase, lowercase, number,
   and compatibility-focused symbol characters.
@@ -127,10 +130,10 @@ Last verified: 2026-09-10.
   refresh-token storage. KDBX tests reopen added, edited, and deleted entries,
   folder lifecycle changes, and all ten typed-entry schemas.
 - A disposable live Dropbox vault completed folder create/rename, type-first API
-  Key creation in “No folder,” entry edit and move, and non-empty folder deletion
-  to the KDBX Recycle Bin on 2026-09-10. Reloading the PWA restored Dropbox
-  automatically. The disposable vault was removed afterward and Development was
-  not opened or modified.
+  Key creation in “No folder,” entry edit and move, and the earlier non-empty
+  folder recycle behavior on 2026-09-10. D-032 subsequently replaced that
+  deletion behavior with an empty-folder-only rule enforced by automated tests.
+  The disposable vault was removed afterward and Development was not modified.
 - A second disposable live Dropbox vault verified the drag interaction itself on
   2026-09-10: a root Note entry was dragged by its handle into another folder,
   the folder counts and selected-entry metadata updated after the Dropbox save,
@@ -143,6 +146,12 @@ Last verified: 2026-09-10.
   path: generate, reveal for character-class inspection, encrypted save,
   lock/reopen, and protected-field presence after reopen. The test vault was
   removed and Development remained untouched.
+- A fifth disposable Dropbox vault verified the D-032 folder and icon behavior
+  in the running app: Rename and Delete appeared only after opening the folder
+  overflow menu, Delete was disabled while a Note remained inside, the Note used
+  its Lucide icon before the title, and Delete became available after the entry
+  was moved to Recycle Bin. The empty folder and test vault were removed;
+  Development was not opened or modified.
 
 ## Current dependencies for vault reading
 

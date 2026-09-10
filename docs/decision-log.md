@@ -153,7 +153,7 @@ they never existed; mark them superseded and link to the replacement.
 
 ### D-024 - KDBX root and folder lifecycle
 
-- **Status:** Accepted; navigator presentation amended by D-027
+- **Status:** Superseded in part by D-032; navigator presentation amended by D-027
 - **Decision:** Present root entries as “No folder” and do not show the vault's
   root group as a duplicate same-named folder. Support create, rename, and delete
   for real KDBX folders. Deleting a non-empty folder uses the standard KDBX
@@ -239,6 +239,18 @@ they never existed; mark them superseded and link to the replacement.
   unlock. Never trim or normalize a KDBX master password.
 - **Reason:** iOS input assistance and same-origin credential autofill must not
   silently change or replace an independently encrypted vault password.
+
+### D-032 - Folder actions and typed-entry icons
+
+- **Status:** Accepted
+- **Decision:** Put Rename and Delete inside a per-folder overflow menu rather
+  than exposing persistent actions below the folder list. Disable Delete when a
+  folder contains entries or child folders, and enforce the same rule in the
+  KDBX domain layer. Use Lucide icons for all ten entry types and place the type
+  icon before entry titles in the navigator and entry list.
+- **Reason:** Contextual actions belong to the folder they affect, destructive
+  actions should not remain visually prominent, and recognizable type icons
+  scan faster than single-letter badges.
 
 ## Open
 

@@ -154,8 +154,8 @@ key-rotation behavior, deletion behavior, and what happens after recovery.
 - A newly created standard KDBX 4 vault reopens with its chosen password and
   rejects a wrong password in automated tests.
 - All ten typed entry schemas reopen through the standard KDBX parser with
-  protected fields intact. Created and renamed folders persist, and deleted
-  non-empty folders reopen in the standard KDBX Recycle Bin with their entries.
+  protected fields intact. Created and renamed folders persist; folder deletion
+  is rejected until both its entry and child-folder collections are empty.
 - Dependency audit currently reports no known vulnerabilities.
 
 This verifies creation and the initial revision-safe entry-write slice; it is not

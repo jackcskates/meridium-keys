@@ -1180,6 +1180,81 @@ h1 {
   font-size: 0.7rem;
 }
 
+.group-nav-item {
+  position: relative;
+  display: grid;
+}
+
+.group-nav-item .group-nav-button { padding-inline-end: 44px; }
+
+.group-menu-trigger {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  color: var(--text-tertiary);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-control);
+  opacity: 0;
+  cursor: pointer;
+  transition: color 120ms ease, background 120ms ease, opacity 120ms ease;
+}
+
+.group-nav-item:hover .group-menu-trigger,
+.group-nav-item.is-selected .group-menu-trigger,
+.group-nav-item.is-menu-open .group-menu-trigger,
+.group-menu-trigger:focus-visible {
+  opacity: 1;
+}
+
+.group-menu-trigger:hover,
+.group-menu-trigger:focus-visible {
+  color: var(--text-primary);
+  background: var(--surface-3);
+}
+
+.group-overflow-menu {
+  margin: 3px 4px 7px;
+  padding: 4px;
+  display: grid;
+  gap: 2px;
+  background: var(--surface-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  box-shadow: var(--shadow-card);
+}
+
+.group-overflow-menu button {
+  min-height: 40px;
+  padding: 0 9px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 0;
+  border-radius: 9px;
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 650;
+  text-align: left;
+  cursor: pointer;
+}
+
+.group-overflow-menu button:hover,
+.group-overflow-menu button:focus-visible {
+  color: var(--text-primary);
+  background: var(--surface-hover);
+}
+
+.group-overflow-menu button.is-danger { color: var(--danger); }
+.group-overflow-menu button:disabled { color: var(--text-tertiary); opacity: 0.45; cursor: not-allowed; }
+
 .entry-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 44px;
@@ -1342,33 +1417,8 @@ h1 {
 
 @media (pointer: coarse) {
   .entry-drag-handle { opacity: 0.9; }
+  .group-nav-item.is-selected .group-menu-trigger { opacity: 1; }
 }
-
-.group-actions {
-  margin-top: 8px;
-  padding-top: 8px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  border-top: 1px solid var(--border-subtle);
-}
-
-.group-actions button {
-  min-height: 36px;
-  padding: 0 8px;
-  color: var(--text-secondary);
-  background: transparent;
-  border: 0;
-  border-radius: var(--radius-control);
-  font: inherit;
-  font-size: 0.74rem;
-  font-weight: 650;
-  cursor: pointer;
-}
-
-.group-actions button:hover,
-.group-actions button:focus-visible { color: var(--text-primary); background: var(--surface-2); }
-.group-actions button.is-danger { color: var(--danger); }
 
 .entry-glyph {
   width: 36px;
@@ -1378,9 +1428,10 @@ h1 {
   color: var(--text-primary);
   background: var(--surface-3);
   border-radius: 11px;
-  font-size: 0.78rem;
-  font-weight: 750;
 }
+
+.entry-glyph svg,
+.unfiled-entry-mark svg { display: block; }
 
 .entry-detail {
   display: flex;

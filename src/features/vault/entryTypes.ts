@@ -14,7 +14,6 @@ export type EntryFieldDefinition = {
 export type EntryTypeDefinition = {
   id: VaultEntryType
   label: string
-  glyph: string
   description: string
   fields: EntryFieldDefinition[]
   summaryKeys: string[]
@@ -22,11 +21,11 @@ export type EntryTypeDefinition = {
 
 export const entryTypeDefinitions: EntryTypeDefinition[] = [
   {
-    id: 'note', label: 'Note', glyph: 'N', description: 'Freeform information and reference notes.', summaryKeys: ['notes'],
+    id: 'note', label: 'Note', description: 'Freeform information and reference notes.', summaryKeys: ['notes'],
     fields: [{ key: 'notes', label: 'Note', storageKey: 'Notes', kind: 'textarea', required: true }],
   },
   {
-    id: 'login', label: 'Login', glyph: 'L', description: 'Website or application sign-in.', summaryKeys: ['username', 'url'],
+    id: 'login', label: 'Login', description: 'Website or application sign-in.', summaryKeys: ['username', 'url'],
     fields: [
       { key: 'username', label: 'Username or email', storageKey: 'UserName', kind: 'text' },
       { key: 'password', label: 'Password', storageKey: 'Password', kind: 'secret' },
@@ -35,7 +34,7 @@ export const entryTypeDefinitions: EntryTypeDefinition[] = [
     ],
   },
   {
-    id: 'account', label: 'Account', glyph: 'A', description: 'Social account with recovery information.', summaryKeys: ['username', 'url'],
+    id: 'account', label: 'Account', description: 'Social account with recovery information.', summaryKeys: ['username', 'url'],
     fields: [
       { key: 'username', label: 'Username or email', storageKey: 'UserName', kind: 'text' },
       { key: 'password', label: 'Password', storageKey: 'Password', kind: 'secret' },
@@ -47,7 +46,7 @@ export const entryTypeDefinitions: EntryTypeDefinition[] = [
     ],
   },
   {
-    id: 'database', label: 'Database', glyph: 'D', description: 'Database host, credentials, and connection details.', summaryKeys: ['database', 'host', 'username'],
+    id: 'database', label: 'Database', description: 'Database host, credentials, and connection details.', summaryKeys: ['database', 'host', 'username'],
     fields: [
       { key: 'database', label: 'Database name', storageKey: 'Database', kind: 'text' },
       { key: 'host', label: 'Host', storageKey: 'Host', kind: 'text' },
@@ -59,7 +58,7 @@ export const entryTypeDefinitions: EntryTypeDefinition[] = [
     ],
   },
   {
-    id: 'password', label: 'Password', glyph: 'P', description: 'A standalone password or passphrase.', summaryKeys: ['url'],
+    id: 'password', label: 'Password', description: 'A standalone password or passphrase.', summaryKeys: ['url'],
     fields: [
       { key: 'password', label: 'Password', storageKey: 'Password', kind: 'secret', required: true },
       { key: 'url', label: 'Related website', storageKey: 'URL', kind: 'url', placeholder: 'https://' },
@@ -67,7 +66,7 @@ export const entryTypeDefinitions: EntryTypeDefinition[] = [
     ],
   },
   {
-    id: 'api-key', label: 'API Key', glyph: 'K', description: 'API credentials, secret, and endpoint.', summaryKeys: ['service', 'endpoint'],
+    id: 'api-key', label: 'API Key', description: 'API credentials, secret, and endpoint.', summaryKeys: ['service', 'endpoint'],
     fields: [
       { key: 'service', label: 'Service', storageKey: 'Service', kind: 'text' },
       { key: 'apiKey', label: 'API key', storageKey: 'API Key', kind: 'secret', required: true },
@@ -77,7 +76,7 @@ export const entryTypeDefinitions: EntryTypeDefinition[] = [
     ],
   },
   {
-    id: 'identity', label: 'Identity', glyph: 'I', description: 'Personal identity and document information.', summaryKeys: ['email', 'phone'],
+    id: 'identity', label: 'Identity', description: 'Personal identity and document information.', summaryKeys: ['email', 'phone'],
     fields: [
       { key: 'fullName', label: 'Full name', storageKey: 'Full Name', kind: 'text' },
       { key: 'email', label: 'Email', storageKey: 'Email', kind: 'email' },
@@ -89,7 +88,7 @@ export const entryTypeDefinitions: EntryTypeDefinition[] = [
     ],
   },
   {
-    id: 'membership', label: 'Membership', glyph: 'M', description: 'Membership number, access, and renewal details.', summaryKeys: ['memberNumber', 'username'],
+    id: 'membership', label: 'Membership', description: 'Membership number, access, and renewal details.', summaryKeys: ['memberNumber', 'username'],
     fields: [
       { key: 'memberNumber', label: 'Member number', storageKey: 'Member Number', kind: 'text' },
       { key: 'username', label: 'Username or email', storageKey: 'UserName', kind: 'text' },
@@ -100,7 +99,7 @@ export const entryTypeDefinitions: EntryTypeDefinition[] = [
     ],
   },
   {
-    id: 'crypto-wallet', label: 'Crypto Wallet', glyph: 'W', description: 'Wallet address, recovery phrase, and private key.', summaryKeys: ['network', 'walletAddress'],
+    id: 'crypto-wallet', label: 'Crypto Wallet', description: 'Wallet address, recovery phrase, and private key.', summaryKeys: ['network', 'walletAddress'],
     fields: [
       { key: 'network', label: 'Network', storageKey: 'Network', kind: 'text' },
       { key: 'walletAddress', label: 'Wallet address', storageKey: 'Wallet Address', kind: 'text' },
@@ -111,7 +110,7 @@ export const entryTypeDefinitions: EntryTypeDefinition[] = [
     ],
   },
   {
-    id: 'serial-number', label: 'Serial Number', glyph: 'S', description: 'Product serial, purchase, and warranty details.', summaryKeys: ['manufacturer', 'model', 'serialNumber'],
+    id: 'serial-number', label: 'Serial Number', description: 'Product serial, purchase, and warranty details.', summaryKeys: ['manufacturer', 'model', 'serialNumber'],
     fields: [
       { key: 'manufacturer', label: 'Manufacturer', storageKey: 'Manufacturer', kind: 'text' },
       { key: 'model', label: 'Model', storageKey: 'Model', kind: 'text' },
