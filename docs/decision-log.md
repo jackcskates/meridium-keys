@@ -207,6 +207,17 @@ they never existed; mark them superseded and link to the replacement.
   service limits. Restricting the action to actual passwords avoids silently
   applying password assumptions to secrets with provider-defined formats.
 
+### D-029 - Mobile App Lock input and icon parity
+
+- **Status:** Accepted
+- **Decision:** Disable mobile text transformations on the temporary App Lock
+  field and ignore accidental leading or trailing paste whitespace. Keep vault
+  master passwords exact. Render Apple touch and maskable PWA icons at the same
+  optical scale as the desktop icon and version their URLs to bypass stale
+  installation caches.
+- **Reason:** Phone keyboards and icon masks must not make the same application
+  credential or identity behave differently across devices.
+
 ## Open
 
 ### D-005 - Standard KDBX compatibility

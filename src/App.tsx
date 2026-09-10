@@ -190,12 +190,22 @@ function AppLock({ onUnlock }: { onUnlock: () => void }) {
     event.preventDefault()
     const form = event.currentTarget
     const password = String(new FormData(form).get('appPassword') ?? '')
-    form.reset()
     setIsChecking(true)
     setError('')
     try {
-      if (await verifyAppPassword(password)) onUnlock()
-      else setError('That app password is not correct.')
+      if (await verifyAppPassword(password)) {
+        form.reset()
+        onUnlock()
+      } else {
+        setError('That app password is not correct. This is separate from each vault master password.')
+        const passwordInput = form.elements.namedItem('appPassword')
+        if (passwordInput instanceof HTMLInputElement) {
+          passwordInput.focus()
+          passwordInput.select()
+        }
+      }
+    } catch {
+      setError('This device could not verify the app password. Close and reopen the updated app, then try again.')
     } finally {
       setIsChecking(false)
     }
@@ -215,10 +225,11 @@ function AppLock({ onUnlock }: { onUnlock: () => void }) {
           <label className="field">
             <span>App password</span>
             <div className="secret-input">
-              <input autoFocus autoComplete="current-password" disabled={isChecking} name="appPassword" required type={showPassword ? 'text' : 'password'} />
+              <input autoCapitalize="none" autoCorrect="off" autoFocus autoComplete="current-password" disabled={isChecking} enterKeyHint="go" name="appPassword" required spellCheck={false} type={showPassword ? 'text' : 'password'} />
               <button aria-label={showPassword ? 'Hide app password' : 'Show app password'} onClick={() => setShowPassword((current) => !current)} type="button"><Icon name={showPassword ? 'eye-off' : 'eye'} /></button>
             </div>
           </label>
+          <p className="field-note">Use the Meridium Keys app password, not a vault’s separate master password.</p>
           {error && <p className="unlock-error" role="alert">{error}</p>}
           <button className="button button-primary button-wide" disabled={isChecking} type="submit"><Icon name="key" />{isChecking ? 'Checking…' : 'Unlock app'}</button>
         </form>

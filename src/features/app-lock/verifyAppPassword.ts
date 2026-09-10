@@ -23,6 +23,10 @@ export async function derivePasswordVerifier(password: string, salt: Uint8Array,
   return new Uint8Array(bits)
 }
 
+export function normalizeAppPasswordInput(password: string) {
+  return password.trim()
+}
+
 function equalBytes(left: Uint8Array, right: Uint8Array) {
   if (left.length !== right.length) return false
   let difference = 0
@@ -33,6 +37,6 @@ function equalBytes(left: Uint8Array, right: Uint8Array) {
 }
 
 export async function verifyAppPassword(password: string) {
-  const actual = await derivePasswordVerifier(password, decodeBase64(saltBase64))
+  const actual = await derivePasswordVerifier(normalizeAppPasswordInput(password), decodeBase64(saltBase64))
   return equalBytes(actual, decodeBase64(verifierBase64))
 }

@@ -761,6 +761,12 @@ h1 {
 .field input:disabled { opacity: 0.65; cursor: wait; }
 .field small { color: var(--text-tertiary); font-size: 0.74rem; font-weight: 500; }
 .field small.field-error { color: var(--danger); }
+.field-note {
+  margin: -8px 0 0;
+  color: var(--text-tertiary);
+  font-size: 0.74rem;
+  line-height: 1.45;
+}
 .secret-input { position: relative; }
 .secret-input input { padding-right: 48px; }
 

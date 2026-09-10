@@ -21,7 +21,14 @@ own origin.
 - On iPhone and iPad, the notice explains the Share > Add to Home Screen flow.
 - Once installed, the notice is hidden and the app uses standalone display.
 - A Meridium Apple touch icon and both regular and maskable 192 px and 512 px
-  icons are included.
+  icons are included. Phone and desktop assets use the same optical mark scale;
+  the mark remains inside the Android maskable safe area.
+- Icon URLs carry an artwork version so a new installation does not reuse the
+  earlier undersized phone icon from browser cache.
+
+An icon already installed on an iPhone is controlled by iOS and is not reliably
+replaced by a service-worker update. After this icon change, remove the existing
+Home Screen app once and add `keys.meridium.app` to the Home Screen again.
 
 ## Offline boundary
 

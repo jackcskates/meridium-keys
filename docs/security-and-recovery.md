@@ -13,6 +13,11 @@ committed. Successful unlock is remembered in `sessionStorage`, and explicit
 App Lock removes that flag and unmounts the Dropbox/vault workspace so its
 memory-only session data is released.
 
+The App Lock field disables mobile capitalization, autocorrection, and spelling
+changes. Accidental leading or trailing whitespace from paste is ignored for
+this temporary app credential. Vault master passwords remain byte-exact and are
+not trimmed or normalized.
+
 This is a temporary casual-access gate, not server authentication. Because the
 entire static client is delivered to the device, a determined person can alter
 the client or perform an offline guessing attack against its verifier. The

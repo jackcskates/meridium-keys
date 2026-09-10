@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { derivePasswordVerifier } from './verifyAppPassword'
+import { derivePasswordVerifier, normalizeAppPasswordInput } from './verifyAppPassword'
 
 describe('derivePasswordVerifier', () => {
   it('is deterministic for the same password and salt', async () => {
@@ -14,5 +14,9 @@ describe('derivePasswordVerifier', () => {
     const first = await derivePasswordVerifier('fixture-password-a', salt, 10)
     const second = await derivePasswordVerifier('fixture-password-b', salt, 10)
     expect(first).not.toEqual(second)
+  })
+
+  it('ignores accidental whitespace around the temporary app password', () => {
+    expect(normalizeAppPasswordInput('  fixture-only-password\n')).toBe('fixture-only-password')
   })
 })
