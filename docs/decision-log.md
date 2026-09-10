@@ -278,6 +278,17 @@ they never existed; mark them superseded and link to the replacement.
   follows Actions specimen 405 while preserving the hierarchy and tap guidance
   of the broader design reference.
 
+### D-035 - Resilient installed-app update detection
+
+- **Status:** Accepted
+- **Decision:** Keep user-approved service-worker activation, but check for a
+  new bundle at launch, focus, visibility return, page restore, connectivity
+  return, and every 60 seconds while the PWA stays open. Surface the update
+  prompt whenever the registration already has a waiting worker, even if the
+  original library callback was missed.
+- **Reason:** A long-running installed PWA can otherwise remain on an older UI
+  bundle and continue showing superseded components after production deploys.
+
 ## Open
 
 ### D-005 - Standard KDBX compatibility

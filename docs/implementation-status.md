@@ -9,7 +9,8 @@ Last verified: 2026-09-10.
   Meridium icons, iOS standalone metadata, native Chromium install prompting,
   iPhone/iPad installation guidance, and an explicit update prompt. Installed
   clients check for a new service worker at launch, when returning to the
-  foreground, and when connectivity returns.
+  foreground, when connectivity returns, when a page is restored, and every 60
+  seconds while open. The prompt also detects a worker that was already waiting.
 - Phone install icons now use the same approximately 70-percent Meridium-mark
   scale as desktop icons, with cache-busted manifest and Apple touch references.
 - Phone safe-area handling plus live online/offline Dropbox status and automatic

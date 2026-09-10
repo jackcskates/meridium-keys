@@ -110,6 +110,7 @@ function DeleteVaultDialog({ vault, isDeleting, error, onCancel, onDelete }: {
 
 function UpdatePrompt() {
   const [registration, setRegistration] = useState<ServiceWorkerRegistration | null>(null)
+  const [hasWaitingWorker, setHasWaitingWorker] = useState(false)
   const {
     needRefresh: [needRefresh],
     updateServiceWorker,
@@ -124,21 +125,43 @@ function UpdatePrompt() {
   useEffect(() => {
     if (!registration) return
 
+    let trackedWorker: ServiceWorker | null = null
+
+    const syncWaitingWorker = () => setHasWaitingWorker(Boolean(registration.waiting))
+    const trackInstallingWorker = () => {
+      trackedWorker?.removeEventListener('statechange', syncWaitingWorker)
+      trackedWorker = registration.installing
+      trackedWorker?.addEventListener('statechange', syncWaitingWorker)
+      syncWaitingWorker()
+    }
+
     const checkForUpdate = () => {
       if (document.visibilityState === 'visible' && navigator.onLine) {
-        void registration.update().catch(() => undefined)
+        void registration.update().then(syncWaitingWorker).catch(() => undefined)
       }
     }
 
+    registration.addEventListener('updatefound', trackInstallingWorker)
     document.addEventListener('visibilitychange', checkForUpdate)
     window.addEventListener('online', checkForUpdate)
+    window.addEventListener('focus', checkForUpdate)
+    window.addEventListener('pageshow', checkForUpdate)
+    const updateInterval = window.setInterval(checkForUpdate, 60_000)
+    syncWaitingWorker()
+    checkForUpdate()
+
     return () => {
+      registration.removeEventListener('updatefound', trackInstallingWorker)
+      trackedWorker?.removeEventListener('statechange', syncWaitingWorker)
       document.removeEventListener('visibilitychange', checkForUpdate)
       window.removeEventListener('online', checkForUpdate)
+      window.removeEventListener('focus', checkForUpdate)
+      window.removeEventListener('pageshow', checkForUpdate)
+      window.clearInterval(updateInterval)
     }
   }, [registration])
 
-  if (!needRefresh) return null
+  if (!needRefresh && !hasWaitingWorker) return null
 
   return (
     <div className="update-toast" role="status">

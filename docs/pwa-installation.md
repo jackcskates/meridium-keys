@@ -48,7 +48,10 @@ be added only after the per-device App Lock envelope is implemented.
 - After one device authorization, launch and reload automatically restore the
   Dropbox library from the encrypted refresh credential. Sign out removes it.
 - Service-worker updates wait for user approval; the interface asks the user to
-  lock open vaults before applying an update.
+  lock open vaults before applying an update. The app checks at launch, when it
+  regains focus, when a page is restored or connectivity returns, and every 60
+  seconds while it remains open. An already-waiting worker also surfaces the
+  prompt even if its original update callback was missed.
 - Phone layouts respect display cutouts and home-indicator safe areas.
 
 ## Verification
