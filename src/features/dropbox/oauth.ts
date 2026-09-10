@@ -16,6 +16,7 @@ type OAuthTransaction = {
 type TokenResponse = {
   access_token?: string
   expires_in?: number
+  refresh_token?: string
 }
 
 let callbackPromise: Promise<DropboxSession | null> | null = null
@@ -62,7 +63,7 @@ export async function beginDropboxAuthorization() {
     response_type: 'code',
     code_challenge: challenge,
     code_challenge_method: 'S256',
-    token_access_type: 'online',
+    token_access_type: 'offline',
     state,
   })
 
@@ -120,6 +121,30 @@ async function exchangeCallback(): Promise<DropboxSession | null> {
   return {
     accessToken: payload.access_token,
     expiresAt: Date.now() + payload.expires_in * 1000,
+    refreshToken: payload.refresh_token,
+    accountName: '',
+  }
+}
+
+export async function refreshDropboxAuthorization(refreshToken: string): Promise<DropboxSession> {
+  const body = new URLSearchParams({
+    refresh_token: refreshToken,
+    grant_type: 'refresh_token',
+    client_id: dropboxAppKey,
+  })
+  const response = await fetch(tokenEndpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body,
+  })
+  const payload = await response.json() as TokenResponse
+  if (!response.ok || !payload.access_token || !payload.expires_in) {
+    throw new DropboxAuthError('Dropbox could not restore the saved connection. Connect again.')
+  }
+  return {
+    accessToken: payload.access_token,
+    expiresAt: Date.now() + payload.expires_in * 1000,
+    refreshToken: payload.refresh_token || refreshToken,
     accountName: '',
   }
 }

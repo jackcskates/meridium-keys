@@ -1,9 +1,23 @@
+export type VaultEntryType =
+  | 'note'
+  | 'login'
+  | 'account'
+  | 'database'
+  | 'password'
+  | 'api-key'
+  | 'identity'
+  | 'membership'
+  | 'crypto-wallet'
+  | 'serial-number'
+
 export type VaultEntrySummary = {
   id: string
   groupId: string
+  type: VaultEntryType
   title: string
   username: string
   url: string
+  subtitle: string
   hasPassword: boolean
   icon: number | null
   isDeleted: boolean
@@ -12,11 +26,9 @@ export type VaultEntrySummary = {
 export type VaultEntryDraft = {
   id?: string
   groupId: string
+  type: VaultEntryType
   title: string
-  username: string
-  password: string
-  url: string
-  notes: string
+  fields: Record<string, string>
 }
 
 export type VaultEntryDetails = VaultEntryDraft & {
@@ -25,6 +37,7 @@ export type VaultEntryDetails = VaultEntryDraft & {
 
 export type VaultGroupSummary = {
   id: string
+  parentGroupId: string
   name: string
   path: string
   depth: number
@@ -32,10 +45,17 @@ export type VaultGroupSummary = {
   isRecycleBin: boolean
 }
 
+export type VaultGroupDraft = {
+  id?: string
+  parentGroupId: string
+  name: string
+}
+
 export type VaultSnapshot = {
   fileName: string
   databaseName: string
   version: string
+  rootGroupId: string
   groups: VaultGroupSummary[]
   entries: VaultEntrySummary[]
 }
@@ -55,13 +75,15 @@ export type VaultWorkerRequest =
   | { type: 'get-entry'; entryId: string; requestId: string }
   | { type: 'prepare-entry-save'; entry: VaultEntryDraft; requestId: string }
   | { type: 'prepare-entry-delete'; entryId: string; requestId: string }
-  | { type: 'finish-entry-save'; changeId: string; commit: boolean; requestId: string }
+  | { type: 'prepare-group-save'; group: VaultGroupDraft; requestId: string }
+  | { type: 'prepare-group-delete'; groupId: string; requestId: string }
+  | { type: 'finish-change'; changeId: string; commit: boolean; requestId: string }
 
 export type VaultWorkerResponse =
   | { type: 'progress'; stage: 'reading' | 'decrypting' | 'mapping' | 'creating' | 'encrypting' }
   | { type: 'success'; vault: VaultSnapshot }
   | { type: 'created'; data: ArrayBuffer; fileName: string }
   | { type: 'entry'; entry: VaultEntryDetails; requestId: string }
-  | { type: 'entry-save-prepared'; changeId: string; data: ArrayBuffer; entryId?: string; requestId: string; vault: VaultSnapshot }
-  | { type: 'entry-save-finished'; requestId: string; vault: VaultSnapshot }
+  | { type: 'change-prepared'; changeId: string; data: ArrayBuffer; entryId?: string; groupId?: string; requestId: string; vault: VaultSnapshot }
+  | { type: 'change-finished'; requestId: string; vault: VaultSnapshot }
   | { type: 'error'; code: VaultOpenErrorCode; message: string; requestId?: string }

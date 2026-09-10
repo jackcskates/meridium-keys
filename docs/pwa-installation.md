@@ -38,8 +38,8 @@ be added only after the per-device App Lock envelope is implemented.
 ## Lifecycle behavior
 
 - Online and offline changes update the Dropbox status immediately.
-- Reconnecting automatically reloads the Dropbox library when a memory-only
-  Dropbox session still exists.
+- After one device authorization, launch and reload automatically restore the
+  Dropbox library from the encrypted refresh credential. Sign out removes it.
 - Service-worker updates wait for user approval; the interface asks the user to
   lock open vaults before applying an update.
 - Phone layouts respect display cutouts and home-indicator safe areas.

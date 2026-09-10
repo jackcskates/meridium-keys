@@ -1,5 +1,5 @@
 import { VaultOpenError } from './kdbx'
-import type { VaultEntryDetails, VaultEntryDraft, VaultSnapshot, VaultWorkerRequest, VaultWorkerResponse } from './types'
+import type { VaultEntryDetails, VaultEntryDraft, VaultGroupDraft, VaultSnapshot, VaultWorkerRequest, VaultWorkerResponse } from './types'
 
 export const maxVaultFileSize = 64 * 1024 * 1024
 
@@ -11,10 +11,11 @@ type PendingRequest = {
   timeout: number
 }
 
-export type PreparedVaultEntrySave = {
+export type PreparedVaultChange = {
   changeId: string
   data: ArrayBuffer
   entryId?: string
+  groupId?: string
   vault: VaultSnapshot
 }
 
@@ -66,21 +67,33 @@ export class UnlockedVaultSession {
     return message.entry
   }
 
-  async prepareEntrySave(entry: VaultEntryDraft): Promise<PreparedVaultEntrySave> {
+  async prepareEntrySave(entry: VaultEntryDraft): Promise<PreparedVaultChange> {
     const message = await this.request((requestId) => ({ type: 'prepare-entry-save', entry, requestId }))
-    if (message.type !== 'entry-save-prepared') throw new VaultOpenError('WORKER_FAILURE', 'The secure vault worker returned an unexpected save response.')
+    if (message.type !== 'change-prepared') throw new VaultOpenError('WORKER_FAILURE', 'The secure vault worker returned an unexpected save response.')
     return { changeId: message.changeId, data: message.data, entryId: message.entryId, vault: message.vault }
   }
 
-  async prepareEntryDelete(entryId: string): Promise<PreparedVaultEntrySave> {
+  async prepareEntryDelete(entryId: string): Promise<PreparedVaultChange> {
     const message = await this.request((requestId) => ({ type: 'prepare-entry-delete', entryId, requestId }))
-    if (message.type !== 'entry-save-prepared') throw new VaultOpenError('WORKER_FAILURE', 'The secure vault worker returned an unexpected delete response.')
+    if (message.type !== 'change-prepared') throw new VaultOpenError('WORKER_FAILURE', 'The secure vault worker returned an unexpected delete response.')
     return { changeId: message.changeId, data: message.data, vault: message.vault }
   }
 
-  async finishEntrySave(changeId: string, commit: boolean) {
-    const message = await this.request((requestId) => ({ type: 'finish-entry-save', changeId, commit, requestId }))
-    if (message.type !== 'entry-save-finished') throw new VaultOpenError('WORKER_FAILURE', 'The secure vault worker could not finish the save.')
+  async prepareGroupSave(group: VaultGroupDraft): Promise<PreparedVaultChange> {
+    const message = await this.request((requestId) => ({ type: 'prepare-group-save', group, requestId }))
+    if (message.type !== 'change-prepared') throw new VaultOpenError('WORKER_FAILURE', 'The secure vault worker returned an unexpected folder response.')
+    return { changeId: message.changeId, data: message.data, groupId: message.groupId, vault: message.vault }
+  }
+
+  async prepareGroupDelete(groupId: string): Promise<PreparedVaultChange> {
+    const message = await this.request((requestId) => ({ type: 'prepare-group-delete', groupId, requestId }))
+    if (message.type !== 'change-prepared') throw new VaultOpenError('WORKER_FAILURE', 'The secure vault worker returned an unexpected folder delete response.')
+    return { changeId: message.changeId, data: message.data, vault: message.vault }
+  }
+
+  async finishChange(changeId: string, commit: boolean) {
+    const message = await this.request((requestId) => ({ type: 'finish-change', changeId, commit, requestId }))
+    if (message.type !== 'change-finished') throw new VaultOpenError('WORKER_FAILURE', 'The secure vault worker could not finish the save.')
     return message.vault
   }
 

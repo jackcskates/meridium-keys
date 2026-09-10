@@ -1067,7 +1067,35 @@ h1 {
   text-transform: uppercase;
 }
 
-.group-list button,
+.panel-heading {
+  min-height: 32px;
+  margin-bottom: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.panel-heading h2 { margin: 0; }
+
+.panel-action {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-control);
+  font: inherit;
+  font-size: 1.15rem;
+  cursor: pointer;
+}
+
+.panel-action:hover,
+.panel-action:focus-visible { color: var(--text-primary); background: var(--surface-2); }
+
+.group-list > button,
 .entry-list button {
   appearance: none;
   width: 100%;
@@ -1081,7 +1109,7 @@ h1 {
   text-align: left;
 }
 
-.group-list button {
+.group-list > button {
   padding: 8px 10px;
   display: flex;
   align-items: center;
@@ -1090,7 +1118,7 @@ h1 {
   font-size: 0.82rem;
 }
 
-.group-list button small {
+.group-list > button small {
   color: var(--text-tertiary);
   font-size: 0.7rem;
 }
@@ -1126,15 +1154,41 @@ h1 {
   font-size: 0.7rem;
 }
 
-.group-list button:hover,
-.group-list button:focus-visible,
+.group-list > button:hover,
+.group-list > button:focus-visible,
 .entry-list button:hover,
 .entry-list button:focus-visible,
-.group-list button.is-selected,
+.group-list > button.is-selected,
 .entry-list button.is-selected {
   color: var(--text-primary);
   background: var(--surface-2);
 }
+
+.group-actions {
+  margin-top: 8px;
+  padding-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.group-actions button {
+  min-height: 36px;
+  padding: 0 8px;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-control);
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.group-actions button:hover,
+.group-actions button:focus-visible { color: var(--text-primary); background: var(--surface-2); }
+.group-actions button.is-danger { color: var(--danger); }
 
 .entry-glyph {
   width: 36px;
@@ -1157,6 +1211,13 @@ h1 {
 .entry-editor {
   display: grid;
   gap: 14px;
+}
+
+.entry-editor-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
 }
 
 .entry-editor-heading h2 { margin: 3px 0 0; color: var(--text-primary); font-size: 1.15rem; }
@@ -1218,6 +1279,61 @@ h1 {
 }
 
 .masked-secret { letter-spacing: 0.16em; }
+
+.entry-type-picker { display: grid; gap: 16px; }
+.type-picker-copy { margin: 0; color: var(--text-secondary); font-size: 0.8rem; line-height: 1.5; }
+
+.entry-type-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.entry-type-grid button {
+  min-width: 0;
+  min-height: 64px;
+  padding: 9px;
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  color: var(--text-secondary);
+  background: var(--surface-2);
+  border: 0;
+  border-radius: var(--radius-control);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.entry-type-grid button:hover,
+.entry-type-grid button:focus-visible { color: var(--text-primary); background: var(--surface-hover); }
+.entry-type-grid button > span:last-child { min-width: 0; display: grid; gap: 3px; }
+.entry-type-grid strong { color: var(--text-primary); font-size: 0.78rem; }
+.entry-type-grid small { color: var(--text-tertiary); font-size: 0.66rem; line-height: 1.35; }
+
+.secret-field { position: relative; }
+.secret-field textarea { padding-right: 58px; }
+.secret-field.is-masked textarea { -webkit-text-security: disc; }
+.secret-field button {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  min-width: 42px;
+  height: 34px;
+  padding: 0 7px;
+  color: var(--text-secondary);
+  background: var(--surface-inset);
+  border: 0;
+  border-radius: 9px;
+  font: inherit;
+  font-size: 0.68rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.secret-field button:hover,
+.secret-field button:focus-visible { color: var(--text-primary); background: var(--surface-hover); }
 
 .read-only-note,
 .vault-empty-state {
@@ -1311,6 +1427,7 @@ h1 {
 
 @media (max-width: 720px) {
   .password-requirements ul { grid-template-columns: 1fr; }
+  .entry-type-grid { grid-template-columns: 1fr; }
   .app-frame { position: relative; width: 100%; height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)); min-height: 0; border: 0; border-radius: 0; }
   .workspace { min-height: 0; }
   .app-lock-brand { min-height: 62px; padding-inline: 16px; }

@@ -59,6 +59,9 @@ for careful credential work, with lock and sync status always explicit.
   expand arrow competes for rail space. Rail icons share one center line and
   comparable optical size.
 - The main workspace belongs to the selected vault.
+- The folder navigator represents the KDBX root as “No folder.” It never repeats
+  the vault name as an artificial folder. Users can create, rename, and delete
+  real KDBX folders, including folders containing entries.
 - Storage section labels are text-only. The sidebar footer owns connection
   status, Sign out, and the avatar/profile placeholder; connected and ready
   states use the semantic green status dot with a text label.
@@ -79,6 +82,8 @@ for careful credential work, with lock and sync status always explicit.
 ## Interaction rules
 
 - One primary action per dialog or state.
+- Entry creation starts with a type chooser. The selected type determines the
+  form, field labels, protected values, and safe summary shown afterward.
 - Familiar controls and predictable placement.
 - Visible labels above inputs; placeholders are examples, never labels.
 - Secret fields are masked by default.

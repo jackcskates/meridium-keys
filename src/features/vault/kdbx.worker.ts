@@ -2,7 +2,7 @@
 
 import { DOMParser as XmlDomParser, XMLSerializer as XmlSerializer } from '@xmldom/xmldom'
 import type { Kdbx } from 'kdbxweb'
-import { createKdbxData, loadKdbxDatabase, mapKdbxSnapshot, prepareKdbxEntryDelete, prepareKdbxEntrySave, readKdbxEntryDetails, VaultOpenError } from './kdbx'
+import { createKdbxData, loadKdbxDatabase, mapKdbxSnapshot, prepareKdbxEntryDelete, prepareKdbxEntrySave, prepareKdbxGroupDelete, prepareKdbxGroupSave, readKdbxEntryDetails, VaultOpenError } from './kdbx'
 import type { VaultWorkerRequest, VaultWorkerResponse } from './types'
 
 const scope = self as DedicatedWorkerGlobalScope
@@ -60,7 +60,7 @@ scope.onmessage = async (event: MessageEvent<VaultWorkerRequest>) => {
       const changeId = crypto.randomUUID()
       pendingChange = { id: changeId, database: prepared.database }
       scope.postMessage({
-        type: 'entry-save-prepared',
+        type: 'change-prepared',
         changeId,
         data: prepared.data,
         entryId: prepared.entryId,
@@ -76,7 +76,38 @@ scope.onmessage = async (event: MessageEvent<VaultWorkerRequest>) => {
       const changeId = crypto.randomUUID()
       pendingChange = { id: changeId, database: prepared.database }
       scope.postMessage({
-        type: 'entry-save-prepared',
+        type: 'change-prepared',
+        changeId,
+        data: prepared.data,
+        requestId: event.data.requestId,
+        vault: prepared.vault,
+      } satisfies VaultWorkerResponse, [prepared.data])
+      return
+    }
+
+    if (event.data.type === 'prepare-group-save') {
+      if (pendingChange) throw new VaultOpenError('WORKER_FAILURE', 'Finish the current save before changing a folder.')
+      const prepared = await prepareKdbxGroupSave(database, event.data.group, fileName)
+      const changeId = crypto.randomUUID()
+      pendingChange = { id: changeId, database: prepared.database }
+      scope.postMessage({
+        type: 'change-prepared',
+        changeId,
+        data: prepared.data,
+        groupId: prepared.groupId,
+        requestId: event.data.requestId,
+        vault: prepared.vault,
+      } satisfies VaultWorkerResponse, [prepared.data])
+      return
+    }
+
+    if (event.data.type === 'prepare-group-delete') {
+      if (pendingChange) throw new VaultOpenError('WORKER_FAILURE', 'Finish the current save before deleting a folder.')
+      const prepared = await prepareKdbxGroupDelete(database, event.data.groupId, fileName)
+      const changeId = crypto.randomUUID()
+      pendingChange = { id: changeId, database: prepared.database }
+      scope.postMessage({
+        type: 'change-prepared',
         changeId,
         data: prepared.data,
         requestId: event.data.requestId,
@@ -90,7 +121,7 @@ scope.onmessage = async (event: MessageEvent<VaultWorkerRequest>) => {
     }
     if (event.data.commit) database = pendingChange.database
     pendingChange = null
-    respond({ type: 'entry-save-finished', requestId: event.data.requestId, vault: mapKdbxSnapshot(database, fileName) })
+    respond({ type: 'change-finished', requestId: event.data.requestId, vault: mapKdbxSnapshot(database, fileName) })
   } catch (error) {
     const safeError = error instanceof VaultOpenError
       ? error

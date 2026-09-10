@@ -24,12 +24,13 @@ working vault interface, not a marketing site.
 - The official Dropbox JavaScript SDK with OAuth authorization-code flow and
   PKCE. The browser receives an app key, never an app secret.
 - `kdbxweb` for standard KDBX parsing and `hash-wasm` for Argon2d/Argon2id in
-  the dedicated crypto worker. The current slice is deliberately read-only.
+  the dedicated crypto worker. The worker also performs revision-safe KDBX entry
+  and folder serialization before encrypted bytes leave the device.
 
 Security-sensitive dependencies are locked, overridden where required to keep
 patched transitive versions, and checked with automated compatibility tests and
-`npm audit`. Write support remains deferred until cross-application fixtures are
-expanded.
+`npm audit`. Write support is constrained to Dropbox vaults with expected-revision
+preconditions; local file selections remain read only.
 
 ## Security boundaries
 
@@ -39,6 +40,8 @@ expanded.
 - Dropbox file identifiers, revisions, and modification times.
 - Non-sensitive preferences such as theme and layout.
 - An encrypted recovery record, if the recovery design is approved.
+- An encrypted Dropbox refresh credential. Its interim device-local wrapping key
+  must be replaced by the planned App Lock envelope.
 
 ### Memory only while unlocked
 
@@ -105,19 +108,20 @@ The visual thesis for the first UX pass will be a calm, high-trust workspace:
 dense enough for fast retrieval, quiet enough for careful credential work, and
 explicit about vault and sync state.
 
-## Decisions required before write and secret-interaction implementation
+## Decisions required before later security and secret-interaction slices
 
 1. Exact recovery-phrase behavior and threat model.
 2. Supported devices and browser baseline for the first release.
 3. Automatic lock rules and clipboard-clearing behavior.
-4. The minimum entry types and fields for version one.
+4. Multi-client conflict resolution beyond stopping a stale revision.
 
 ## Delivery slices after those decisions
 
 1. Design tokens, app shell, vault rail, locked and empty states.
 2. KDBX compatibility spike with golden test fixtures. **Read-only slice complete.**
 3. Dropbox PKCE connection and encrypted-file listing.
-4. Unlock, search, reveal, copy, edit, save, and lock flow.
+4. Unlock, typed entry/folder edit, save, delete, and lock flow. **Revision-safe
+   Dropbox write slice complete. Search, reveal, copy, and generation remain.**
 5. Offline encrypted vault cache and conflict recovery. **The installable,
    app-shell-only PWA foundation is complete.**
 6. Security review, cross-app compatibility tests, and accessibility testing.

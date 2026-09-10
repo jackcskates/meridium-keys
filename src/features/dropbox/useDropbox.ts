@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { deleteDropboxVault, downloadDropboxVault, listDropboxVaults, loadDropboxAccount, uploadDropboxVaultRevision, uploadNewDropboxVault } from './client'
-import { beginDropboxAuthorization, completeDropboxAuthorization, DropboxAuthError } from './oauth'
+import { forgetDropboxRefreshToken, loadDropboxRefreshToken, rememberDropboxRefreshToken } from './credentialStore'
+import { beginDropboxAuthorization, completeDropboxAuthorization, DropboxAuthError, refreshDropboxAuthorization } from './oauth'
 import type { DropboxConnectionStatus, DropboxSession, DropboxVaultFile } from './types'
 
 export function useDropbox() {
@@ -17,11 +18,27 @@ export function useDropbox() {
     setStatus('loading')
     setError('')
     try {
-      const [accountName, remoteVaults] = await Promise.all([
-        loadDropboxAccount(activeSession),
-        listDropboxVaults(activeSession),
-      ])
-      setSession({ ...activeSession, accountName })
+      let usableSession = activeSession
+      if (activeSession.refreshToken && activeSession.expiresAt - Date.now() < 60_000) {
+        usableSession = await refreshDropboxAuthorization(activeSession.refreshToken)
+      }
+      let accountName: string
+      let remoteVaults: DropboxVaultFile[]
+      try {
+        [accountName, remoteVaults] = await Promise.all([
+          loadDropboxAccount(usableSession),
+          listDropboxVaults(usableSession),
+        ])
+      } catch (firstError) {
+        if (!usableSession.refreshToken) throw firstError
+        usableSession = await refreshDropboxAuthorization(usableSession.refreshToken)
+        ;[accountName, remoteVaults] = await Promise.all([
+          loadDropboxAccount(usableSession),
+          listDropboxVaults(usableSession),
+        ])
+      }
+      if (usableSession.refreshToken) void rememberDropboxRefreshToken(usableSession.refreshToken).catch(() => undefined)
+      setSession({ ...usableSession, accountName })
       setVaults(remoteVaults)
       setStatus('connected')
     } catch (loadError) {
@@ -34,14 +51,29 @@ export function useDropbox() {
     if (callbackStarted.current) return
     callbackStarted.current = true
     void completeDropboxAuthorization()
-      .then((connectedSession) => {
-        if (connectedSession) void loadLibrary(connectedSession)
+      .then(async (connectedSession) => {
+        if (connectedSession) {
+          if (connectedSession.refreshToken) void rememberDropboxRefreshToken(connectedSession.refreshToken).catch(() => undefined)
+          await loadLibrary(connectedSession)
+          return
+        }
+        const refreshToken = await loadDropboxRefreshToken().catch(() => null)
+        if (!refreshToken) return
+        setStatus('connecting')
+        await loadLibrary(await refreshDropboxAuthorization(refreshToken))
       })
       .catch((authError) => {
         setError(authError instanceof DropboxAuthError ? authError.message : 'Dropbox could not connect securely.')
         setStatus('error')
       })
   }, [loadLibrary])
+
+  useEffect(() => {
+    if (!session?.refreshToken) return
+    const delay = Math.max(5_000, session.expiresAt - Date.now() - 60_000)
+    const timeout = window.setTimeout(() => { void loadLibrary(session) }, delay)
+    return () => window.clearTimeout(timeout)
+  }, [loadLibrary, session])
 
   useEffect(() => {
     const reconnect = () => {
@@ -102,6 +134,7 @@ export function useDropbox() {
   }
 
   function disconnect() {
+    void forgetDropboxRefreshToken().catch(() => undefined)
     setSession(null)
     setVaults([])
     setError('')

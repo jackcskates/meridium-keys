@@ -8,7 +8,8 @@ Last verified: 2026-09-10.
 - Installable PWA shell with offline application assets, regular and maskable
   Meridium icons, iOS standalone metadata, native Chromium install prompting,
   iPhone/iPad installation guidance, and an explicit update prompt.
-- Phone safe-area handling plus live online/offline Dropbox status and reconnect.
+- Phone safe-area handling plus live online/offline Dropbox status and automatic
+  Dropbox session restoration after the user authorizes the device once.
 - Temporary session App Lock with a slow PBKDF2 verifier and explicit Lock App
   action. The plaintext app password is not committed.
 - Responsive Meridium application frame with a collapsible vault sidebar.
@@ -17,12 +18,16 @@ Last verified: 2026-09-10.
 - Local `.kdbx` selection with extension and 64 MB size validation.
 - Read-only KDBX 4 unlock for password-protected Argon2id, Argon2d, and AES-KDF vaults.
 - Key derivation and KDBX parsing in a dedicated web worker.
-- In-memory mapping of groups and safe entry metadata.
+- In-memory mapping of the KDBX root, nested folders, typed entries, and safe
+  entry summaries. The vault root is represented as “No folder,” not as a
+  duplicate folder named after the vault.
 - Three-pane group, entry, and detail browser on desktop, with a stacked phone layout.
 - Masked password presence without extracting the protected password into the React model.
 - Explicit lock that removes the decrypted snapshot from application state.
 - Safe wrong-password, invalid-file, unsupported-format, corrupt-file, timeout, and worker errors.
-- Dropbox App Folder authorization using OAuth authorization code with PKCE.
+- Dropbox App Folder authorization using OAuth authorization code with PKCE and
+  offline access. The refresh token is AES-GCM encrypted before IndexedDB storage;
+  short-lived access tokens remain memory-only.
 - Recursive discovery of standard KDBX files in the app folder.
 - Direct download of selected encrypted KDBX bytes into the existing local unlock worker.
 - Creation of standard KDBX 4 vaults with Argon2id in the dedicated crypto worker.
@@ -35,9 +40,13 @@ Last verified: 2026-09-10.
   requirements, confirmation matching, and duplicate vault-name detection.
 - Vault removal from the Dropbox library without opening the vault or knowing
   its master password, with a named destructive confirmation and revision check.
-- Add and edit Login-compatible KDBX entries while a Dropbox vault is unlocked.
-  Title, group, username, password, URL, and notes are encrypted locally before
-  the next Dropbox revision is uploaded.
+- Create, rename, and delete KDBX folders while a Dropbox vault is unlocked.
+  Deleting a non-empty folder moves the folder and its contents to the standard
+  KDBX Recycle Bin.
+- Type-first create and edit flows for Note, Login, Account, Database, Password,
+  API Key, Identity, Membership, Crypto Wallet, and Serial Number entries.
+  Each type supplies its own field set; standard fields and protected custom
+  fields remain readable in compatible KeePass applications.
 - Delete entries into the standard KDBX Recycle Bin with explicit confirmation.
 - Revision-safe Dropbox updates: an edit is uploaded only over the revision that
   was opened, and the in-memory worker commits it only after Dropbox confirms.
@@ -50,7 +59,9 @@ Last verified: 2026-09-10.
 
 - The browser receives a `File` selected by the user and does not upload it.
 - The master password is read from an uncontrolled form, sent to the worker, and the form is reset immediately.
-- The read-only snapshot contains title, username, URL, group metadata, and only a password-presence flag.
+- The rendered snapshot contains entry title, type, safe subtitle, folder
+  metadata, and only a protected-field presence flag. Protected values enter the
+  page only while that entry is actively edited.
 - Reveal and copy outside the entry editor, search, local encrypted caching, and recovery are not part of this slice.
 - Local device files remain read only because a browser file selection does not
   grant safe overwrite access. Dropbox vaults support revision-safe entry updates.
@@ -86,7 +97,14 @@ Last verified: 2026-09-10.
   KDBX filtering, account identity, byte-preserving download, the direct upload
   response shape, incomplete-metadata reconciliation, no-overwrite creation,
   name conflicts, revision-safe update and delete requests, conflicts, and
-  expired-token errors. KDBX tests reopen added, edited, and deleted entries.
+  expired-token errors, offline-access request and refresh, and encrypted
+  refresh-token storage. KDBX tests reopen added, edited, and deleted entries,
+  folder lifecycle changes, and all ten typed-entry schemas.
+- A disposable live Dropbox vault completed folder create/rename, type-first API
+  Key creation in “No folder,” entry edit and move, and non-empty folder deletion
+  to the KDBX Recycle Bin on 2026-09-10. Reloading the PWA restored Dropbox
+  automatically. The disposable vault was removed afterward and Development was
+  not opened or modified.
 
 ## Current dependencies for vault reading
 
@@ -98,6 +116,7 @@ These are implementation choices, not a proprietary storage layer. The user-owne
 
 ## Next safe slice
 
-Add the per-device App Lock envelope, then encrypt and retain the Dropbox refresh
-token and cached KDBX bytes in IndexedDB. Editing remains blocked on tested KDBX
-serialization and revision-conflict handling.
+Bind the persisted Dropbox credential to the per-device App Lock envelope, then
+add encrypted offline KDBX caching. Search, copy/reveal, password generation,
+automatic locking, and explicit multi-client conflict recovery remain separate
+security and UX slices.

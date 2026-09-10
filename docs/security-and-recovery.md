@@ -65,6 +65,18 @@ encrypts persisted Dropbox authorization and cached KDBX bytes.
   The worker commits that revision only after Dropbox accepts the expected
   remote revision; failed or conflicting uploads discard the provisional model.
 
+### Dropbox authorization
+
+- OAuth uses authorization code with PKCE and no client secret.
+- Access tokens are short-lived and memory-only.
+- The refresh token is AES-GCM encrypted before IndexedDB storage. The stored
+  CryptoKey is non-extractable, and signing out removes the encrypted credential.
+- This interim design protects the plaintext token at rest, but the wrapping key
+  is available to the same browser origin. It does not protect against XSS, a
+  compromised browser profile, or malicious code already running as the app.
+- The planned App Lock envelope must replace the device-local wrapping key so
+  reconnect is cryptographically bound to the user's app unlock secret.
+
 ### Clipboard
 
 - Copy is an explicit user action.
@@ -126,8 +138,9 @@ key-rotation behavior, deletion behavior, and what happens after recovery.
 - Explicit lock removes the decrypted snapshot and rendered entry metadata.
 - A newly created standard KDBX 4 vault reopens with its chosen password and
   rejects a wrong password in automated tests.
-- Added and edited entries reopen through the standard KDBX parser with protected
-  fields intact; deleted entries reopen in the standard KDBX Recycle Bin.
+- All ten typed entry schemas reopen through the standard KDBX parser with
+  protected fields intact. Created and renamed folders persist, and deleted
+  non-empty folders reopen in the standard KDBX Recycle Bin with their entries.
 - Dependency audit currently reports no known vulnerabilities.
 
 This verifies creation and the initial revision-safe entry-write slice; it is not

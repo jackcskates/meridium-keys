@@ -15,10 +15,12 @@ import type {
   VaultEntryDetails,
   VaultEntryDraft,
   VaultEntrySummary,
+  VaultGroupDraft,
   VaultGroupSummary,
   VaultOpenErrorCode,
   VaultSnapshot,
 } from './types'
+import { allTypedStorageKeys, entryTypeMetadataKey, getEntryTypeDefinition, isVaultEntryType } from './entryTypes'
 
 const currentArgon2Version = 0x13
 let argon2Configured = false
@@ -95,8 +97,13 @@ function plainField(entry: KdbxEntry, name: string) {
 }
 
 function hasProtectedPassword(entry: KdbxEntry) {
-  const value = entry.fields.get('Password')
-  return value instanceof ProtectedValue ? value.byteLength > 0 : typeof value === 'string' && value.length > 0
+  return [...entry.fields.values()].some((value) => value instanceof ProtectedValue && value.byteLength > 0)
+}
+
+function entryTypeFor(entry: KdbxEntry) {
+  const storedType = plainField(entry, entryTypeMetadataKey)
+  if (isVaultEntryType(storedType)) return storedType
+  return plainField(entry, 'UserName') || plainField(entry, 'URL') || hasProtectedPassword(entry) ? 'login' : 'note'
 }
 
 function mapGroup(
@@ -107,28 +114,40 @@ function mapGroup(
   entries: VaultEntrySummary[],
   recycleBinId: string,
   insideRecycleBin = false,
+  includeGroup = true,
 ) {
   const name = group.name?.trim() || 'Untitled group'
-  const pathParts = [...parentPath, name]
+  const pathParts = includeGroup ? [...parentPath, name] : parentPath
   const groupId = group.uuid.toString()
   const isRecycleBin = insideRecycleBin || groupId === recycleBinId
 
-  groups.push({
-    id: groupId,
-    name,
-    path: pathParts.join(' / '),
-    depth,
-    entryCount: group.entries.length,
-    isRecycleBin,
-  })
+  if (includeGroup) {
+    groups.push({
+      id: groupId,
+      parentGroupId: group.parentGroup?.uuid.toString() || '',
+      name,
+      path: pathParts.join(' / '),
+      depth,
+      entryCount: [...group.allEntries()].length,
+      isRecycleBin,
+    })
+  }
 
   for (const entry of group.entries) {
+    const type = entryTypeFor(entry)
+    const definition = getEntryTypeDefinition(type)
+    const subtitle = definition.summaryKeys
+      .map((key) => definition.fields.find((field) => field.key === key))
+      .map((field) => field ? plainField(entry, field.storageKey).trim() : '')
+      .find(Boolean) || definition.label
     entries.push({
       id: entry.uuid.toString(),
       groupId,
+      type,
       title: plainField(entry, 'Title').trim() || 'Untitled entry',
       username: plainField(entry, 'UserName'),
       url: plainField(entry, 'URL'),
+      subtitle,
       hasPassword: hasProtectedPassword(entry),
       icon: typeof entry.icon === 'number' ? entry.icon : null,
       isDeleted: isRecycleBin,
@@ -136,7 +155,7 @@ function mapGroup(
   }
 
   for (const child of group.groups) {
-    mapGroup(child, pathParts, depth + 1, groups, entries, recycleBinId, isRecycleBin)
+    mapGroup(child, pathParts, includeGroup ? depth + 1 : depth, groups, entries, recycleBinId, isRecycleBin)
   }
 }
 
@@ -167,13 +186,15 @@ export function mapKdbxSnapshot(database: Kdbx, fileName = 'Vault.kdbx'): VaultS
 
   const recycleBinId = database.meta.recycleBinUuid?.toString() || ''
   for (const root of database.groups) {
-    mapGroup(root, [], 0, groups, entries, recycleBinId)
+    mapGroup(root, [], 0, groups, entries, recycleBinId, false, false)
   }
+  const rootGroupId = database.getDefaultGroup().uuid.toString()
 
   return {
     fileName,
     databaseName: database.meta.name?.trim() || fileName.replace(/\.kdbx$/i, ''),
     version: `${database.versionMajor}.${database.versionMinor}`,
+    rootGroupId,
     groups,
     entries,
   }
@@ -199,6 +220,15 @@ function findEntry(database: Kdbx, entryId: string) {
   return undefined
 }
 
+function findGroup(database: Kdbx, groupId: string) {
+  for (const root of database.groups) {
+    for (const group of root.allGroups()) {
+      if (group.uuid.toString() === groupId) return group
+    }
+  }
+  return undefined
+}
+
 function entryFieldText(entry: KdbxEntry, name: string) {
   const value = entry.fields.get(name)
   return value instanceof ProtectedValue ? value.getText() : typeof value === 'string' ? value : ''
@@ -208,14 +238,15 @@ export function readKdbxEntryDetails(database: Kdbx, entryId: string): VaultEntr
   const entry = findEntry(database, entryId)
   if (!entry?.parentGroup) throw new VaultOpenError('WORKER_FAILURE', 'That entry could not be found in the open vault.')
 
+  const type = entryTypeFor(entry)
+  const definition = getEntryTypeDefinition(type)
+
   return {
     id: entry.uuid.toString(),
     groupId: entry.parentGroup.uuid.toString(),
+    type,
     title: entryFieldText(entry, 'Title'),
-    username: entryFieldText(entry, 'UserName'),
-    password: entryFieldText(entry, 'Password'),
-    url: entryFieldText(entry, 'URL'),
-    notes: entryFieldText(entry, 'Notes'),
+    fields: Object.fromEntries(definition.fields.map((field) => [field.key, entryFieldText(entry, field.storageKey)])),
   }
 }
 
@@ -236,11 +267,27 @@ export async function prepareKdbxEntrySave(database: Kdbx, draft: VaultEntryDraf
       entry = workingDatabase.createEntry(group)
     }
 
+    const definition = getEntryTypeDefinition(draft.type)
+    const requiredField = definition.fields.find((field) => field.required && !draft.fields[field.key]?.trim())
+    if (requiredField) throw new VaultOpenError('WORKER_FAILURE', `Enter ${requiredField.label.toLowerCase()} before saving this entry.`)
+
+    for (const storageKey of allTypedStorageKeys()) {
+      if (!['UserName', 'Password', 'URL', 'Notes'].includes(storageKey)) entry.fields.delete(storageKey)
+    }
     entry.fields.set('Title', draft.title.trim())
-    entry.fields.set('UserName', draft.username)
-    entry.fields.set('Password', ProtectedValue.fromString(draft.password))
-    entry.fields.set('URL', draft.url)
-    entry.fields.set('Notes', draft.notes)
+    entry.fields.set('UserName', '')
+    entry.fields.set('Password', ProtectedValue.fromString(''))
+    entry.fields.set('URL', '')
+    entry.fields.set('Notes', '')
+    entry.fields.set(entryTypeMetadataKey, draft.type)
+    for (const field of definition.fields) {
+      const value = draft.fields[field.key] || ''
+      if (field.kind === 'secret' || field.kind === 'secret-textarea') {
+        entry.fields.set(field.storageKey, ProtectedValue.fromString(value))
+      } else if (value || ['UserName', 'URL', 'Notes'].includes(field.storageKey)) {
+        entry.fields.set(field.storageKey, value)
+      }
+    }
     entry.times.update()
 
     const data = await workingDatabase.save()
@@ -249,6 +296,62 @@ export async function prepareKdbxEntrySave(database: Kdbx, draft: VaultEntryDraf
       data,
       vault: mapKdbxSnapshot(workingDatabase, fileName),
       entryId: entry.uuid.toString(),
+    }
+  } catch (error) {
+    throw mapKdbxError(error)
+  }
+}
+
+export async function prepareKdbxGroupSave(database: Kdbx, draft: VaultGroupDraft, fileName: string) {
+  const name = draft.name.trim()
+  if (!name) throw new VaultOpenError('WORKER_FAILURE', 'Give this folder a name before saving it.')
+
+  try {
+    const clonedData = await database.save()
+    const workingDatabase = await Kdbx.load(clonedData, database.credentials)
+    const root = workingDatabase.getDefaultGroup()
+    const recycleBinId = workingDatabase.meta.recycleBinUuid?.toString()
+    const existing = draft.id ? findGroup(workingDatabase, draft.id) : undefined
+    if (draft.id && !existing) throw new VaultOpenError('WORKER_FAILURE', 'That folder no longer exists in the open vault.')
+    if (existing?.uuid.toString() === root.uuid.toString() || existing?.uuid.toString() === recycleBinId) {
+      throw new VaultOpenError('WORKER_FAILURE', 'That system folder cannot be changed.')
+    }
+    const parent = existing?.parentGroup || findGroup(workingDatabase, draft.parentGroupId) || root
+    const duplicate = parent.groups.some((group) => group !== existing && (group.name || '').trim().localeCompare(name, undefined, { sensitivity: 'accent' }) === 0)
+    if (duplicate) throw new VaultOpenError('WORKER_FAILURE', `A folder named ${name} already exists here.`)
+
+    const group = existing || workingDatabase.createGroup(parent, name)
+    group.name = name
+    group.times.update()
+    const data = await workingDatabase.save()
+    return {
+      database: workingDatabase,
+      data,
+      vault: mapKdbxSnapshot(workingDatabase, fileName),
+      groupId: group.uuid.toString(),
+    }
+  } catch (error) {
+    throw mapKdbxError(error)
+  }
+}
+
+export async function prepareKdbxGroupDelete(database: Kdbx, groupId: string, fileName: string) {
+  try {
+    const clonedData = await database.save()
+    const workingDatabase = await Kdbx.load(clonedData, database.credentials)
+    const group = findGroup(workingDatabase, groupId)
+    const root = workingDatabase.getDefaultGroup()
+    const recycleBinId = workingDatabase.meta.recycleBinUuid?.toString()
+    if (!group) throw new VaultOpenError('WORKER_FAILURE', 'That folder no longer exists in the open vault.')
+    if (group.uuid.toString() === root.uuid.toString() || group.uuid.toString() === recycleBinId) {
+      throw new VaultOpenError('WORKER_FAILURE', 'That system folder cannot be deleted.')
+    }
+    workingDatabase.remove(group)
+    const data = await workingDatabase.save()
+    return {
+      database: workingDatabase,
+      data,
+      vault: mapKdbxSnapshot(workingDatabase, fileName),
     }
   } catch (error) {
     throw mapKdbxError(error)

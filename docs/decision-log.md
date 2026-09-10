@@ -49,7 +49,7 @@ they never existed; mark them superseded and link to the replacement.
 
 ### D-015 - Initial Dropbox session
 
-- **Status:** Accepted for the read-only compatibility slice
+- **Status:** Superseded by D-023
 - **Decision:** Use authorization-code OAuth with PKCE and a short-lived,
   memory-only Dropbox access token. Do not request or persist a refresh token yet.
 - **Reason:** This enables real App Folder discovery and encrypted KDBX download
@@ -117,9 +117,9 @@ they never existed; mark them superseded and link to the replacement.
 ### D-021 - Revision-safe Dropbox entry writes
 
 - **Status:** Accepted
-- **Decision:** Add and edit Login-compatible KDBX entries inside the dedicated
-  crypto worker. Treat the worker change as provisional until Dropbox accepts an
-  encrypted upload over the exact revision that was opened; discard the
+- **Decision:** Add and edit typed KDBX entries and folders inside the dedicated
+  crypto worker. Treat each worker change as provisional until Dropbox accepts
+  an encrypted upload over the exact revision that was opened; discard the
   provisional change on upload failure or conflict.
 - **Reason:** Entry editing must not silently overwrite another device's newer
   vault or expose plaintext fields to Dropbox.
@@ -137,6 +137,40 @@ they never existed; mark them superseded and link to the replacement.
 - **Reason:** A broken or unwanted vault must remain manageable independently of
   its credential, while both destructive actions stay deliberate and compatible
   with Dropbox and KDBX recovery behavior.
+
+### D-023 - Automatic Dropbox reconnection
+
+- **Status:** Accepted as an interim security boundary
+- **Decision:** Request offline Dropbox access. Keep access tokens memory-only,
+  AES-GCM encrypt the refresh token for IndexedDB, and restore the connection
+  automatically on launch. Sign out deletes the encrypted credential.
+- **Reason:** An installed PWA should reconnect after the device has been
+  authorized instead of forcing OAuth on every launch.
+- **Limitation:** The non-extractable wrapping key lives in the same browser
+  origin as the ciphertext. This protects the plaintext token at rest but not
+  against same-origin malicious code. The per-device App Lock envelope must
+  replace this interim key boundary.
+
+### D-024 - KDBX root and folder lifecycle
+
+- **Status:** Accepted
+- **Decision:** Present root entries as “No folder” and do not show the vault's
+  root group as a duplicate same-named folder. Support create, rename, and delete
+  for real KDBX folders. Deleting a non-empty folder uses the standard KDBX
+  Recycle Bin and keeps its contents together.
+- **Reason:** Vault names and folders are different concepts, root placement is
+  valid, and standard recycle behavior preserves third-party compatibility.
+
+### D-025 - Initial typed-entry schema
+
+- **Status:** Accepted
+- **Decision:** Entry creation begins with one of ten types: Note, Login,
+  Account, Database, Password, API Key, Identity, Membership, Crypto Wallet, or
+  Serial Number. The type determines the form. Store the type as a friendly KDBX
+  custom field, use standard KDBX fields where applicable, and protect secret
+  custom fields with KDBX protected values.
+- **Reason:** Type-first forms reduce irrelevant fields without introducing a
+  proprietary vault format or hiding data from compatible KeePass applications.
 
 ## Open
 
@@ -190,13 +224,13 @@ they never existed; mark them superseded and link to the replacement.
 
 ### D-009 - Initial type schema
 
-- **Status:** Open
+- **Status:** Superseded by D-025
 - **Question:** Which exact fields are required for Login, Password, and API Key?
 - **Impact:** UX forms, KDBX mapping, search, imports, and compatibility.
 
 ### D-010 - Dropbox token persistence
 
-- **Status:** Open
+- **Status:** Superseded by D-023
 - **Question:** Should the browser retain Dropbox authorization across sessions,
   and under what protection and revocation rules?
 - **Impact:** Convenience, background synchronization, and the attack surface of

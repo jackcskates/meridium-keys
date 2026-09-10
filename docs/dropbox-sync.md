@@ -19,8 +19,12 @@ Music credentials, Swift-specific code, or media-library behavior.
 - Authorization uses code flow with PKCE S256 and no app secret.
 - The production redirect is `https://keys.meridium.app/`; the local redirect is
   `http://127.0.0.1:5175/`.
-- The initial token is short-lived and memory-only. Closing or terminating the
-  PWA requires connecting again.
+- Authorization requests offline access. Short-lived access tokens remain
+  memory-only; the returned refresh token is AES-GCM encrypted before it is
+  stored in IndexedDB. On launch or reload, the client decrypts it locally,
+  requests a new access token, and reloads the vault library automatically.
+- Sign out removes the encrypted refresh credential. A failed refresh returns
+  the UI to an explicit reconnect state rather than pretending it is connected.
 - The client recursively lists metadata, filters standard `.kdbx` files, and
   downloads a selected encrypted file directly into the local unlock worker.
 - Newly created standard KDBX files upload directly to the App Folder. Creation
@@ -33,13 +37,15 @@ Music credentials, Swift-specific code, or media-library behavior.
   `files.content.read`, and `files.content.write`. Content write is used for new
   vault creation, revision-safe encrypted entry updates, and confirmed vault
   deletion.
-- Entry saves use Dropbox update mode with the revision that was opened. A newer
-  remote revision stops the upload instead of being overwritten.
+- Entry and folder saves use Dropbox update mode with the revision that was
+  opened. A newer remote revision stops the upload instead of being overwritten.
 - Vault deletion names the vault, requires confirmation, does not require the
   KDBX master password, and sends the listed revision as a delete precondition.
 
-**Next:** request offline access only after the per-device App Lock can encrypt a
-refresh token at rest. A plaintext refresh token must never be persisted.
+**Current limitation:** the non-extractable wrapping key and encrypted refresh
+token are stored in the same browser origin. This protects the token from casual
+at-rest inspection, but same-origin script running in a compromised session could
+still use the key. The next security slice derives the envelope from App Lock.
 
 ## Remote layout
 
@@ -69,6 +75,8 @@ also carry a standard or custom icon, but it is only readable after unlock.
 IndexedDB may contain:
 
 - Encrypted vault bytes.
+- An AES-GCM-encrypted Dropbox refresh token and its non-extractable device-local
+  wrapping key until the App Lock envelope replaces that interim boundary.
 - Dropbox file ID, path, revision, size, and modification time.
 - A local dirty flag and pending operation metadata.
 - Non-sensitive display preferences.
@@ -83,7 +91,7 @@ persistent search index of decrypted values.
 3. Compare remote revision with cached metadata.
 4. Download changed encrypted bytes without decrypting in the sync layer.
 5. Unlock only after the user selects a vault and provides its credential.
-6. On save, serialize and encrypt in the crypto layer first.
+6. On entry or folder save, serialize and encrypt in the crypto layer first.
 7. Write encrypted bytes locally as a pending revision.
 8. Upload using the last known Dropbox revision as a precondition. The worker
    keeps the change provisional until Dropbox confirms the encrypted upload.

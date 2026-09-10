@@ -20,11 +20,14 @@ future possibilities.
 - Create a standard KDBX 4 vault with an independent master password.
 - Upload a new vault to the connected Dropbox App Folder without overwriting an existing file.
 - Select and unlock a local standard KDBX 4 vault.
-- Browse groups, entry names, usernames, and URLs without exposing protected passwords.
+- Browse folders and typed entry summaries without exposing protected values.
 - Mask password presence and explicitly relock the vault.
 - Keep decryption and key derivation in a dedicated worker.
 - Remove a Dropbox vault without unlocking it, after a named confirmation.
-- Add and edit Login-compatible entries in unlocked Dropbox vaults.
+- Create, rename, and delete folders, including non-empty folders, using standard
+  KDBX recycle behavior.
+- Keep entries directly in the vault root through the explicit “No folder” choice.
+- Create and edit all ten confirmed entry types through type-specific forms.
 - Delete entries into the standard KDBX Recycle Bin.
 
 **Proposed:**
@@ -50,10 +53,9 @@ future possibilities.
 
 **Implemented so far:**
 
-- Browse groups and entries in the currently unlocked vault.
-- Inspect safe Login-compatible metadata in a read-only detail pane.
-- Create and edit Login-compatible title, group, username, password, website,
-  and notes fields in an unlocked Dropbox vault.
+- Browse folders and entries in the currently unlocked vault.
+- Inspect safe type, folder, subtitle, and protected-field presence metadata.
+- Choose an entry type first, then create or edit the fields for that type.
 - Keyword search is the next slice and is not implemented yet.
 
 **Proposed:**
@@ -66,23 +68,24 @@ future possibilities.
 
 ## Item types and fields
 
-**Confirmed initial types:**
+**Confirmed and implemented initial types:**
 
-- **Login:** a credential used to sign in to a service.
-- **Password:** a standalone secret without a required username or URL.
-- **API Key:** a developer or service credential.
-- **Extensible types:** the system must allow more types to be added.
-
-**Proposed initial fields:**
-
-| Type | Fields to validate |
+| Type | Initial fields |
 | --- | --- |
-| Login | Name, username/email, password, website, notes, tags |
-| Password | Name, password, notes, tags |
-| API Key | Name, key/token, service, environment, expiry, notes, tags |
+| Note | Name, notes |
+| Login | Name, username/email, password, website, notes |
+| Account | Name, username/email, password, profile URL, recovery email, recovery phone, recovery codes, notes |
+| Database | Name, database, host, port, username, password, connection string, notes |
+| Password | Name, password, related URL, notes |
+| API Key | Name, service, API key, API secret, endpoint, notes |
+| Identity | Name, full name, email, phone, address, date of birth, ID number, notes |
+| Membership | Name, member number, username, password, website, expiration, notes |
+| Crypto Wallet | Name, network, wallet address, recovery phrase, private key, PIN, notes |
+| Serial Number | Name, manufacturer, model, serial number, purchase date, warranty expiration, notes |
 
-The exact schema is open. Type-specific fields must map cleanly to the chosen
-vault file format without losing data in third-party applications.
+The type is stored as a friendly custom KDBX field. Common values use standard
+KDBX fields; additional named and protected fields remain visible to third-party
+KeePass applications without requiring a proprietary file format.
 
 ## Secret interactions
 
@@ -116,6 +119,8 @@ vault file format without losing data in third-party applications.
 **Implemented so far:**
 
 - Connect to the scoped Dropbox App Folder using OAuth code flow with PKCE.
+- Request offline access and restore the Dropbox connection automatically from
+  an AES-GCM-encrypted refresh credential after the device has been authorized.
 - Discover and download standard KDBX files.
 - Upload newly created KDBX files with no-overwrite conflict handling.
 - Upload edited encrypted KDBX bytes only over the expected Dropbox revision.
@@ -123,7 +128,9 @@ vault file format without losing data in third-party applications.
 
 **Proposed:**
 
-- Use Dropbox OAuth authorization code + PKCE.
+- Bind the persisted refresh credential to the future per-device App Lock key;
+  the current device-local wrapping key provides at-rest protection but is not an
+  XSS or compromised-browser-profile boundary.
 - Request only metadata read, content read, and content write permissions needed
   for the App Folder workflow.
 - Cache encrypted vault bytes and non-sensitive revision metadata in IndexedDB.

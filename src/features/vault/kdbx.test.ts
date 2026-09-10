@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { DOMParser as XmlDomParser, XMLSerializer as XmlSerializer } from '@xmldom/xmldom'
 import { Consts, Credentials, Kdbx, ProtectedValue } from 'kdbxweb'
-import { configureArgon2, createKdbxData, loadKdbxDatabase, prepareKdbxEntryDelete, prepareKdbxEntrySave, readKdbxEntryDetails, readKdbxSnapshot, VaultOpenError } from './kdbx'
+import { configureArgon2, createKdbxData, loadKdbxDatabase, prepareKdbxEntryDelete, prepareKdbxEntrySave, prepareKdbxGroupDelete, prepareKdbxGroupSave, readKdbxEntryDetails, readKdbxSnapshot, VaultOpenError } from './kdbx'
+import { createEmptyEntryDraft, entryTypeDefinitions } from './entryTypes'
 
 // kdbxweb uses browser-native XML APIs in production. Supply the current,
 // patched xmldom implementation only when these compatibility tests run in Node.
@@ -33,7 +34,8 @@ describe('readKdbxSnapshot', () => {
 
     expect(result.databaseName).toBe('Created Fixture')
     expect(result.version).toMatch(/^4\./)
-    expect(result.groups.some((group) => group.name === 'Created Fixture')).toBe(true)
+    expect(result.rootGroupId).toBeTruthy()
+    expect(result.groups.some((group) => group.name === 'Created Fixture')).toBe(false)
     await expect(readKdbxSnapshot(data, 'wrong password')).rejects.toMatchObject({ code: 'INVALID_CREDENTIALS' })
   })
 
@@ -85,11 +87,14 @@ describe('readKdbxSnapshot', () => {
     const groupId = database.getDefaultGroup().uuid.toString()
     const prepared = await prepareKdbxEntrySave(database, {
       groupId,
+      type: 'login',
       title: 'Meridium Account',
-      username: 'jack@example.test',
-      password: 'new-entry-secret',
-      url: 'https://meridium.app',
-      notes: 'Created in Meridium Keys',
+      fields: {
+        username: 'jack@example.test',
+        password: 'new-entry-secret',
+        url: 'https://meridium.app',
+        notes: 'Created in Meridium Keys',
+      },
     }, 'Editable Fixture.kdbx')
     const reopened = await loadKdbxDatabase(prepared.data, fixturePassword)
     const summary = await readKdbxSnapshot(prepared.data, fixturePassword, 'Editable Fixture.kdbx')
@@ -97,10 +102,13 @@ describe('readKdbxSnapshot', () => {
 
     expect(entry).toBeDefined()
     expect(readKdbxEntryDetails(reopened, entry!.id)).toMatchObject({
-      username: 'jack@example.test',
-      password: 'new-entry-secret',
-      url: 'https://meridium.app',
-      notes: 'Created in Meridium Keys',
+      type: 'login',
+      fields: expect.objectContaining({
+        username: 'jack@example.test',
+        password: 'new-entry-secret',
+        url: 'https://meridium.app',
+        notes: 'Created in Meridium Keys',
+      }),
     })
     expect(new TextDecoder().decode(prepared.data)).not.toContain('new-entry-secret')
   })
@@ -113,16 +121,19 @@ describe('readKdbxSnapshot', () => {
     const prepared = await prepareKdbxEntrySave(database, {
       id: existing.id,
       groupId: existing.groupId,
+      type: 'login',
       title: 'Updated Account',
-      username: 'updated@example.test',
-      password: 'updated-secret',
-      url: 'https://updated.example.test',
-      notes: 'Updated safely',
+      fields: {
+        username: 'updated@example.test',
+        password: 'updated-secret',
+        url: 'https://updated.example.test',
+        notes: 'Updated safely',
+      },
     }, 'fixture.kdbx')
     const reopened = await loadKdbxDatabase(prepared.data, fixturePassword)
     const updated = readKdbxEntryDetails(reopened, existing.id)
 
-    expect(updated).toMatchObject({ title: 'Updated Account', password: 'updated-secret' })
+    expect(updated).toMatchObject({ title: 'Updated Account', type: 'login', fields: expect.objectContaining({ password: 'updated-secret' }) })
     const reopenedEntry = [...reopened.getDefaultGroup().allEntries()].find((entry) => entry.uuid.toString() === existing.id)
     expect(reopenedEntry?.history).toHaveLength(1)
   })
@@ -139,5 +150,67 @@ describe('readKdbxSnapshot', () => {
     expect(deleted).toMatchObject({ isDeleted: true })
     expect(reopened.entries.filter((entry) => !entry.isDeleted)).toHaveLength(0)
     expect(reopened.groups.some((group) => group.isRecycleBin)).toBe(true)
+  })
+
+  it('creates, renames, and deletes a non-empty standard KDBX folder', async () => {
+    const original = await createFixture(Consts.KdfId.Aes)
+    let database = await loadKdbxDatabase(original, fixturePassword)
+    const rootGroupId = database.getDefaultGroup().uuid.toString()
+    const created = await prepareKdbxGroupSave(database, { parentGroupId: rootGroupId, name: 'Infrastructure' }, 'fixture.kdbx')
+    database = created.database
+    expect(created.vault.groups).toContainEqual(expect.objectContaining({ id: created.groupId, name: 'Infrastructure' }))
+
+    const withEntry = await prepareKdbxEntrySave(database, {
+      groupId: created.groupId,
+      type: 'database',
+      title: 'Production DB',
+      fields: { database: 'main', host: 'db.example.test', username: 'admin', password: 'protected-db-secret' },
+    }, 'fixture.kdbx')
+    database = withEntry.database
+
+    const renamed = await prepareKdbxGroupSave(database, { id: created.groupId, parentGroupId: rootGroupId, name: 'Systems' }, 'fixture.kdbx')
+    expect(renamed.vault.groups).toContainEqual(expect.objectContaining({ id: created.groupId, name: 'Systems', entryCount: 1 }))
+
+    const deleted = await prepareKdbxGroupDelete(renamed.database, created.groupId, 'fixture.kdbx')
+    const recycledGroup = deleted.vault.groups.find((group) => group.id === created.groupId)
+    expect(recycledGroup).toMatchObject({ name: 'Systems', isRecycleBin: true, entryCount: 1 })
+    expect(deleted.vault.entries.find((entry) => entry.title === 'Production DB')).toMatchObject({ isDeleted: true })
+  })
+
+  it('round-trips every Meridium entry type through standard KDBX fields', async () => {
+    const original = await createFixture(Consts.KdfId.Aes)
+    let database = await loadKdbxDatabase(original, fixturePassword)
+    const rootGroupId = database.getDefaultGroup().uuid.toString()
+    let lastData = original
+    const protectedMarker = 'typed-secret-marker'
+
+    for (const definition of entryTypeDefinitions) {
+      const draft = createEmptyEntryDraft(definition.id, rootGroupId)
+      draft.title = `${definition.label} Fixture`
+      for (const field of definition.fields) {
+        draft.fields[field.key] = field.kind === 'secret' || field.kind === 'secret-textarea'
+          ? `${protectedMarker}-${definition.id}-${field.key}`
+          : field.kind === 'url'
+            ? 'https://example.test'
+            : field.kind === 'email'
+              ? 'owner@example.test'
+              : field.kind === 'date'
+                ? '2026-09-10'
+                : `${definition.label} ${field.label}`
+      }
+      const prepared = await prepareKdbxEntrySave(database, draft, 'typed.kdbx')
+      database = prepared.database
+      lastData = prepared.data
+    }
+
+    const snapshot = await readKdbxSnapshot(lastData, fixturePassword, 'typed.kdbx')
+    expect(new Set(snapshot.entries.map((entry) => entry.type))).toEqual(new Set(entryTypeDefinitions.map((definition) => definition.id)))
+    for (const definition of entryTypeDefinitions) {
+      const summary = snapshot.entries.find((entry) => entry.title === `${definition.label} Fixture`)
+      expect(summary).toMatchObject({ type: definition.id, groupId: snapshot.rootGroupId })
+      const details = readKdbxEntryDetails(database, summary!.id)
+      expect(details.type).toBe(definition.id)
+    }
+    expect(new TextDecoder().decode(lastData)).not.toContain(protectedMarker)
   })
 })

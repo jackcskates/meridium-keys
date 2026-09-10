@@ -8,8 +8,8 @@ import { VaultBrowser } from './features/vault/VaultBrowser'
 import { createVaultFile, toVaultFileName, type CreateVaultStage } from './features/vault/createVault'
 import { VaultOpenError } from './features/vault/kdbx'
 import { vaultPasswordRequirements } from './features/vault/passwordPolicy'
-import type { VaultEntryDraft, VaultSnapshot } from './features/vault/types'
-import { openVaultSession, type PreparedVaultEntrySave, type UnlockedVaultSession, type UnlockStage } from './features/vault/unlockVault'
+import type { VaultEntryDraft, VaultGroupDraft, VaultSnapshot } from './features/vault/types'
+import { openVaultSession, type PreparedVaultChange, type UnlockedVaultSession, type UnlockStage } from './features/vault/unlockVault'
 import './App.css'
 
 type View = 'connect' | 'vaults' | 'create' | 'unlock' | 'browse'
@@ -440,18 +440,18 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
     setView('vaults')
   }
 
-  async function persistPreparedVaultChange(prepared: PreparedVaultEntrySave) {
+  async function persistPreparedVaultChange(prepared: PreparedVaultChange) {
     const session = vaultSessionRef.current
     const remoteVault = activeDropboxVault
     if (!session || !remoteVault || selectedStorage !== 'dropbox') {
-      if (session) await session.finishEntrySave(prepared.changeId, false)
+      if (session) await session.finishChange(prepared.changeId, false)
       throw new Error('Open this vault from Dropbox before saving changes.')
     }
 
     const encryptedFile = new File([prepared.data], remoteVault.name, { type: 'application/octet-stream' })
     try {
       const updatedVault = await dropbox.save(remoteVault, encryptedFile)
-      const committedVault = await session.finishEntrySave(prepared.changeId, true)
+      const committedVault = await session.finishChange(prepared.changeId, true)
       setActiveDropboxVault(updatedVault)
       setActiveDropboxVaultId(updatedVault.id)
       setSelectedVaultFile(encryptedFile)
@@ -459,7 +459,7 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
       return committedVault
     } catch (error) {
       try {
-        await session.finishEntrySave(prepared.changeId, false)
+        await session.finishChange(prepared.changeId, false)
       } catch {
         session.close()
         vaultSessionRef.current = null
@@ -483,6 +483,21 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
     const session = vaultSessionRef.current
     if (!session) throw new Error('The vault is locked. Open it again before deleting an entry.')
     return persistPreparedVaultChange(await session.prepareEntryDelete(entryId))
+  }
+
+  async function saveVaultGroup(group: VaultGroupDraft) {
+    const session = vaultSessionRef.current
+    if (!session) throw new Error('The vault is locked. Open it again before saving a folder.')
+    const prepared = await session.prepareGroupSave(group)
+    const committedVault = await persistPreparedVaultChange(prepared)
+    if (!prepared.groupId) throw new Error('The folder was saved but could not be selected afterward.')
+    return { groupId: prepared.groupId, vault: committedVault }
+  }
+
+  async function deleteVaultGroup(groupId: string) {
+    const session = vaultSessionRef.current
+    if (!session) throw new Error('The vault is locked. Open it again before deleting a folder.')
+    return persistPreparedVaultChange(await session.prepareGroupDelete(groupId))
   }
 
   return (
@@ -767,12 +782,14 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
           {activeView === 'browse' && vaultSnapshot && (
             <VaultBrowser
               canEdit={selectedStorage === 'dropbox' && Boolean(activeDropboxVault)}
+              onDeleteGroup={deleteVaultGroup}
               onDeleteEntry={deleteVaultEntry}
               onLoadEntry={(entryId) => {
                 const session = vaultSessionRef.current
                 return session ? session.getEntry(entryId) : Promise.reject(new Error('The vault is locked. Open it again before editing an entry.'))
               }}
               onLock={lockVault}
+              onSaveGroup={saveVaultGroup}
               onSaveEntry={saveVaultEntry}
               vault={vaultSnapshot}
             />

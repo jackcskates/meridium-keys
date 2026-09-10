@@ -8,6 +8,7 @@ export type DropboxConnectionStatus =
 export type DropboxSession = {
   accessToken: string
   expiresAt: number
+  refreshToken?: string
   accountName: string
 }
 
