@@ -8,7 +8,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'prompt',
-      includeAssets: ['meridium-mark.svg', 'apple-touch-icon-v2.png', 'icon-192x192-v2.png', 'icon-512x512-v2.png', 'icon-192x192-maskable-v2.png', 'icon-512x512-maskable-v2.png'],
+      includeAssets: ['meridium-mark.svg', 'apple-touch-icon-v3.png', 'icon-192x192-v3.png', 'icon-512x512-v3.png', 'icon-1024x1024-v3.png', 'icon-192x192-maskable-v3.png', 'icon-512x512-maskable-v3.png', 'icon-1024x1024-maskable-v3.png'],
       manifest: {
         id: '/',
         name: 'Meridium Keys',
@@ -23,10 +23,12 @@ export default defineConfig({
         scope: '/',
         start_url: '/',
         icons: [
-          { src: '/icon-192x192-v2.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
-          { src: '/icon-512x512-v2.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
-          { src: '/icon-192x192-maskable-v2.png', sizes: '192x192', type: 'image/png', purpose: 'maskable' },
-          { src: '/icon-512x512-maskable-v2.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+          { src: '/icon-192x192-v3.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: '/icon-512x512-v3.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+          { src: '/icon-1024x1024-v3.png', sizes: '1024x1024', type: 'image/png', purpose: 'any' },
+          { src: '/icon-192x192-maskable-v3.png', sizes: '192x192', type: 'image/png', purpose: 'maskable' },
+          { src: '/icon-512x512-maskable-v3.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+          { src: '/icon-1024x1024-maskable-v3.png', sizes: '1024x1024', type: 'image/png', purpose: 'maskable' },
         ],
       },
       workbox: {

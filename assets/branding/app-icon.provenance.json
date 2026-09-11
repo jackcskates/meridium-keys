@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "app": "keys",
+  "assetVersion": "v3",
+  "source": "Packages/brand/assets/app-icons/meridium-mark.svg",
+  "sourceSha256": "5f4fc55cfb62db51fd39520af4fd412dc1a8b974b24f6551107c43c2e05bd560",
+  "sourceApproval": "Owner-supplied Meridium design SVG approved for application icon use on 2026-09-11.",
+  "geometry": {
+    "canvas": 600,
+    "mark": 422,
+    "inset": 89,
+    "opticalScale": 0.7033333333,
+    "maskableSafeZoneRadius": 240
+  },
+  "colors": {
+    "foreground": "#4DE89A",
+    "background": "#0F0F0F"
+  }
+}

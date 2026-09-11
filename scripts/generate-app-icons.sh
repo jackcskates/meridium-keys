@@ -4,8 +4,9 @@ set -eu
 repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 renderer=${RSVG_CONVERT:-rsvg-convert}
 
-"$renderer" --width 192 --height 192 --output "$repo_root/public/icon-192x192-v2.png" "$repo_root/assets/branding/app-icon.svg"
-"$renderer" --width 512 --height 512 --output "$repo_root/public/icon-512x512-v2.png" "$repo_root/assets/branding/app-icon.svg"
-"$renderer" --width 192 --height 192 --output "$repo_root/public/icon-192x192-maskable-v2.png" "$repo_root/assets/branding/app-icon-maskable.svg"
-"$renderer" --width 512 --height 512 --output "$repo_root/public/icon-512x512-maskable-v2.png" "$repo_root/assets/branding/app-icon-maskable.svg"
-"$renderer" --width 180 --height 180 --output "$repo_root/public/apple-touch-icon-v2.png" "$repo_root/assets/branding/apple-touch-icon.svg"
+for size in 192 512 1024; do
+  "$renderer" --width "$size" --height "$size" --output "$repo_root/public/icon-${size}x${size}-v3.png" "$repo_root/assets/branding/app-icon.svg"
+  "$renderer" --width "$size" --height "$size" --output "$repo_root/public/icon-${size}x${size}-maskable-v3.png" "$repo_root/assets/branding/app-icon-maskable.svg"
+done
+"$renderer" --width 180 --height 180 --output "$repo_root/public/apple-touch-icon-v3.png" "$repo_root/assets/branding/apple-touch-icon.svg"
+cp "$repo_root/assets/branding/app-icon.svg" "$repo_root/public/favicon-v3.svg"
