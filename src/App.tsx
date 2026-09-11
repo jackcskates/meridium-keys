@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRegisterSW } from 'virtual:pwa-register/react'
 import { verifyAppPassword } from './features/app-lock/verifyAppPassword'
 import type { DropboxVaultFile } from './features/dropbox/types'
@@ -232,24 +232,27 @@ function AppLock({ onUnlock }: { onUnlock: () => void }) {
   const [showPassword, setShowPassword] = useState(false)
   const [isChecking, setIsChecking] = useState(false)
   const [error, setError] = useState('')
+  const passwordInputRef = useRef<HTMLInputElement>(null)
 
-  async function unlock(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    const form = event.currentTarget
-    const password = String(new FormData(form).get('appPassword') ?? '')
+  async function unlock() {
+    const passwordInput = passwordInputRef.current
+    if (!passwordInput) return
+    const password = passwordInput.value
+    if (!password) {
+      setError('Enter the app password.')
+      passwordInput?.focus()
+      return
+    }
     setIsChecking(true)
     setError('')
     try {
       if (await verifyAppPassword(password)) {
-        form.reset()
+        passwordInput.value = ''
         onUnlock()
       } else {
         setError('That app password is not correct. This is separate from each vault master password.')
-        const passwordInput = form.elements.namedItem('appPassword')
-        if (passwordInput instanceof HTMLInputElement) {
-          passwordInput.focus()
-          passwordInput.select()
-        }
+        passwordInput.focus()
+        passwordInput.select()
       }
     } catch {
       setError('This device could not verify the app password. Close and reopen the updated app, then try again.')
@@ -262,24 +265,24 @@ function AppLock({ onUnlock }: { onUnlock: () => void }) {
     <div className="app-frame app-lock-frame">
       <header className="app-lock-brand"><BrandMark /><span><strong>Meridium</strong><small>Keys</small></span></header>
       <main className="app-lock-stage">
-        <form className="focus-card app-lock-card" onSubmit={unlock}>
+        <div aria-labelledby="app-lock-title" className="focus-card app-lock-card" onKeyDown={(event) => { if (event.key === 'Enter' && !event.nativeEvent.isComposing) { event.preventDefault(); void unlock() } }} role="form">
           <div className="security-emblem"><Icon name="lock" size={31} /></div>
           <div className="card-copy">
             <p className="eyebrow">App locked</p>
-            <h1>Unlock Meridium Keys</h1>
+            <h1 id="app-lock-title">Unlock Meridium Keys</h1>
             <p className="lede">Enter the app password to connect storage or open a vault.</p>
           </div>
           <label className="field">
             <span>App password</span>
             <div className="secret-input">
-              <input autoCapitalize="none" autoCorrect="off" autoFocus autoComplete="current-password" disabled={isChecking} enterKeyHint="go" name="appPassword" required spellCheck={false} type={showPassword ? 'text' : 'password'} />
+              <input autoCapitalize="none" autoCorrect="off" autoFocus autoComplete="off" disabled={isChecking} enterKeyHint="go" ref={passwordInputRef} required spellCheck={false} type={showPassword ? 'text' : 'password'} />
               <button aria-label={showPassword ? 'Hide app password' : 'Show app password'} onClick={() => setShowPassword((current) => !current)} type="button"><Icon name={showPassword ? 'eye-off' : 'eye'} /></button>
             </div>
           </label>
           <p className="field-note">Use the Meridium Keys app password, not a vault’s separate master password.</p>
           {error && <p className="unlock-error" role="alert">{error}</p>}
-          <button className="button button-primary button-wide" disabled={isChecking} type="submit"><Icon name="key" />{isChecking ? 'Checking…' : 'Unlock app'}</button>
-        </form>
+          <button className="button button-primary button-wide" disabled={isChecking} onClick={() => void unlock()} type="button"><Icon name="key" />{isChecking ? 'Checking…' : 'Unlock app'}</button>
+        </div>
       </main>
       <UpdatePrompt />
     </div>
@@ -415,13 +418,18 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
     }
   }
 
-  async function submitUnlock(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    const form = event.currentTarget
-    const password = String(new FormData(form).get('masterPassword') ?? '')
+  async function submitUnlock() {
+    const passwordInput = vaultPasswordInputRef.current
+    if (!passwordInput) return
+    const password = passwordInput.value
 
     if (!selectedVaultFile) {
       setUnlockError('Choose a standard .kdbx vault file.')
+      return
+    }
+    if (!password) {
+      setUnlockError('Enter this vault’s master password.')
+      passwordInput?.focus()
       return
     }
 
@@ -434,7 +442,7 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
       vaultSessionRef.current?.close()
       vaultSessionRef.current = opened.session
       setVaultSnapshot(opened.vault)
-      form.reset()
+      passwordInput.value = ''
       setView('browse')
     } catch (error) {
       setUnlockError(error instanceof VaultOpenError ? error.message : 'The vault could not be opened safely.')
@@ -456,8 +464,7 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
     setView('unlock')
   }
 
-  async function submitCreate(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
+  async function submitCreate() {
     setFormTouched(true)
     setCreateError('')
 
@@ -709,11 +716,11 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
           )}
 
           {activeView === 'create' && (
-            <form className="focus-card create-card" onSubmit={submitCreate}>
+            <div aria-labelledby="create-vault-title" className="focus-card create-card" onKeyDown={(event) => { if (event.key === 'Enter' && !event.nativeEvent.isComposing && event.target instanceof HTMLInputElement) { event.preventDefault(); void submitCreate() } }} role="form">
               <button aria-label="Back to vaults" className="back-button back-button-icon" disabled={Boolean(createStage)} onClick={resetCreate} title="Back to vaults" type="button"><Icon name="arrow-left" /></button>
               <div className="card-copy">
                 <p className="eyebrow">New vault</p>
-                <h1>Create your vault</h1>
+                <h1 id="create-vault-title">Create your vault</h1>
                 <p className="lede">This master password protects only this standard KDBX vault. Store it safely; recovery phrases are not enabled yet.</p>
               </div>
 
@@ -783,7 +790,7 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
               </div>
 
               {createError && <p className="unlock-error" role="alert">{createError}</p>}
-              <button className="button button-primary button-wide" disabled={Boolean(createStage)} type="submit">
+              <button className="button button-primary button-wide" disabled={Boolean(createStage)} onClick={() => void submitCreate()} type="button">
                 {createStage && <Icon name={createStage === 'uploading' ? 'cloud' : 'shield'} />}
                 {createStage === 'creating'
                   ? 'Preparing vault…'
@@ -794,27 +801,27 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
                       : 'Create encrypted vault'}
                 {!createStage && <Icon name="chevron-right" />}
               </button>
-            </form>
+            </div>
           )}
 
           {activeView === 'unlock' && (
-            <form className="focus-card unlock-card" onSubmit={submitUnlock}>
+            <div aria-labelledby="unlock-vault-title" className="focus-card unlock-card" onKeyDown={(event) => { if (event.key === 'Enter' && !event.nativeEvent.isComposing) { event.preventDefault(); void submitUnlock() } }} role="form">
               <button aria-label="Back to vaults" className="back-button back-button-icon" onClick={() => setView('vaults')} title="Back to vaults" type="button"><Icon name="arrow-left" /></button>
               <div className="vault-seal"><span>{selectedFile.slice(0, 1).toUpperCase()}</span><span className="seal-lock"><Icon name="lock" size={14} /></span></div>
               <div className="card-copy">
                 <p className="eyebrow">Locked vault</p>
-                <h1>{selectedFile.replace(/\.kdbx$/i, '')}</h1>
+                <h1 id="unlock-vault-title">{selectedFile.replace(/\.kdbx$/i, '')}</h1>
                 <p className="lede">Enter this vault's master password. It will not be saved.</p>
               </div>
               <label className="field">
                 <span>Master password</span>
-                <div className="secret-input"><input autoCapitalize="none" autoComplete="off" autoCorrect="off" autoFocus disabled={isUnlocking} name="masterPassword" ref={vaultPasswordInputRef} required spellCheck={false} type={showPassword ? 'text' : 'password'} /><button aria-label={showPassword ? 'Hide master password' : 'Show master password'} onClick={() => setShowPassword((current) => !current)} type="button"><Icon name={showPassword ? 'eye-off' : 'eye'} /></button></div>
+                <div className="secret-input"><input autoCapitalize="none" autoComplete="off" autoCorrect="off" autoFocus disabled={isUnlocking} ref={vaultPasswordInputRef} required spellCheck={false} type={showPassword ? 'text' : 'password'} /><button aria-label={showPassword ? 'Hide master password' : 'Show master password'} onClick={() => setShowPassword((current) => !current)} type="button"><Icon name={showPassword ? 'eye-off' : 'eye'} /></button></div>
               </label>
               <p className="field-note">Vault passwords are case-sensitive. Every space and punctuation mark must match exactly.</p>
               {unlockError && <p className="unlock-error" role="alert">{unlockError}</p>}
-              <button className="button button-primary button-wide" disabled={isUnlocking} type="submit"><Icon name="key" />{isUnlocking ? `${unlockStage === 'mapping' ? 'Preparing' : unlockStage === 'reading' ? 'Reading' : 'Decrypting'} vault…` : 'Unlock vault'}</button>
+              <button className="button button-primary button-wide" disabled={isUnlocking} onClick={() => void submitUnlock()} type="button"><Icon name="key" />{isUnlocking ? `${unlockStage === 'mapping' ? 'Preparing' : unlockStage === 'reading' ? 'Reading' : 'Decrypting'} vault…` : 'Unlock vault'}</button>
               <button className="text-button" disabled={isUnlocking} onClick={() => fileInputRef.current?.click()} type="button">Choose another KDBX file</button>
-            </form>
+            </div>
           )}
 
           {activeView === 'browse' && vaultSnapshot && (

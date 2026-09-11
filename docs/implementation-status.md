@@ -24,6 +24,10 @@ Last verified: 2026-09-11.
   and site-password autofill even while revealed. Failed unlock attempts retain
   the entered value for inspection and correction while preserving byte-exact
   KDBX password matching.
+- App Lock, vault unlock, vault creation, and protected entry fields are marked
+  as application-managed secrets rather than website credentials. Their actions
+  preserve Enter-key behavior without sending browser login-form signals that
+  trigger Google Password Manager save or update prompts.
 - Responsive Meridium application frame with a collapsible vault sidebar.
 - Home navigation naming, icon-free storage section labels, a compact green
   Dropbox-ready dot beside the Dropbox label, and a bottom profile/sign-out

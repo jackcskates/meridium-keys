@@ -300,6 +300,17 @@ they never existed; mark them superseded and link to the replacement.
   the necessary context. Repeating them consumes working space and weakens the
   calm, direct Meridium hierarchy.
 
+### D-037 - Vault secrets are not browser credentials
+
+- **Status:** Accepted
+- **Decision:** Do not label App Lock, vault master passwords, or stored entry
+  secrets as browser-managed current or new website passwords. Keep autofill off
+  and avoid native credential-form submission for App Lock and vault setup or
+  unlock while preserving keyboard operation and application validation.
+- **Reason:** Google Password Manager otherwise treats Keys as the website whose
+  credential is being changed and repeatedly offers to overwrite an unrelated
+  saved account password.
+
 ## Open
 
 ### D-005 - Standard KDBX compatibility
