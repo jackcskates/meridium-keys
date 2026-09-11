@@ -289,6 +289,17 @@ they never existed; mark them superseded and link to the replacement.
 - **Reason:** A long-running installed PWA can otherwise remain on an older UI
   bundle and continue showing superseded components after production deploys.
 
+### D-036 - Quiet vault working surface
+
+- **Status:** Accepted
+- **Decision:** Remove the redundant workspace header and persistent instructional
+  or empty-state copy from the vault navigator and entry column. Show Dropbox
+  readiness as a compact semantic dot beside the Dropbox section label. Preserve
+  App Lock as an icon in the sidebar footer.
+- **Reason:** The vault name, storage grouping, and visible entries already provide
+  the necessary context. Repeating them consumes working space and weakens the
+  calm, direct Meridium hierarchy.
+
 ## Open
 
 ### D-005 - Standard KDBX compatibility

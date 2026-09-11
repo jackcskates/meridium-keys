@@ -1,6 +1,6 @@
 # Implementation Status
 
-Last verified: 2026-09-10.
+Last verified: 2026-09-11.
 
 ## Working now
 
@@ -25,8 +25,9 @@ Last verified: 2026-09-10.
   the entered value for inspection and correction while preserving byte-exact
   KDBX password matching.
 - Responsive Meridium application frame with a collapsible vault sidebar.
-- Home navigation naming, icon-free storage section labels, explicit green
-  Dropbox-ready status, and a bottom placeholder profile/sign-out area.
+- Home navigation naming, icon-free storage section labels, a compact green
+  Dropbox-ready dot beside the Dropbox label, and a bottom profile/sign-out
+  area. App Lock remains available as an icon in that footer.
 - Home now presents only two large side-by-side landing actions—create a new
   vault or open a device KDBX file—without repeating the Dropbox vault library.
   Dropbox vault deletion remains available from the sidebar.
@@ -36,7 +37,9 @@ Last verified: 2026-09-10.
 - In-memory mapping of the KDBX root, nested folders, typed entries, and safe
   entry summaries. The vault root is represented as “No folder,” not as a
   duplicate folder named after the vault.
-- Three-pane group, entry, and detail browser on desktop, with a stacked phone layout.
+- Three-pane group, entry, and detail browser on desktop, with a stacked phone
+  layout. The working surface omits the redundant global header, empty local and
+  unfiled messages, and the entry-column heading and drag instruction.
 - Masked protected-field presence without extracting protected values into the
   React snapshot.
 - Direct Copy controls beside every populated protected field in the selected

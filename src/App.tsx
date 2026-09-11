@@ -334,13 +334,15 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
   const createIsValid = Boolean(proposedVaultFileName) && passwordReady && !vaultNameTaken
   const profileName = dropbox.session?.accountName || 'Jack Skates'
   const profileInitials = profileName.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join('') || 'JS'
-  const workspaceTitle = activeView === 'connect'
-    ? 'Connect storage'
-    : activeView === 'vaults'
-      ? 'Home'
-      : activeView === 'create'
-        ? 'Create vault'
-        : selectedFile.replace(/\.kdbx$/i, '') || 'Unlock vault'
+  const dropboxStatusLabel = !pwa.isOnline
+    ? 'Offline'
+    : dropbox.status === 'connecting' || dropbox.status === 'loading'
+      ? 'Connecting'
+      : dropboxConnected
+        ? 'Ready'
+        : dropbox.status === 'error'
+          ? 'Needs attention'
+          : 'Disconnected'
 
   useEffect(() => () => vaultSessionRef.current?.close(), [])
 
@@ -617,13 +619,13 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
                 <span className="vault-avatar">{selectedFile.slice(0, 1).toUpperCase()}<span className="vault-lock"><Icon name={vaultSnapshot ? 'check' : 'lock'} size={11} /></span></span>
                 <span className="sidebar-row-copy"><strong>{selectedFile.replace(/\.kdbx$/i, '')}</strong><small>{vaultSnapshot ? 'Open · read only' : 'Locked'}</small></span>
               </button>
-            ) : (
-              <p className="sidebar-empty">No local vault selected</p>
-            )}
+            ) : null}
           </div>
 
           <div className="sidebar-section">
-            <div className="sidebar-section-label"><span>On Dropbox</span></div>
+            <div aria-label={`On Dropbox, ${dropboxStatusLabel}`} className="sidebar-section-label" title={`Dropbox ${dropboxStatusLabel.toLowerCase()}`}>
+              <span className="sidebar-section-label-status"><span>On Dropbox</span><span aria-hidden="true" className={`status-dot ${pwa.isOnline && dropboxConnected ? 'is-ready' : ''}`} /></span>
+            </div>
             {dropbox.vaults.map((vault) => (
               <div className="sidebar-vault-item" key={vault.id}>
                 <button
@@ -658,11 +660,10 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
         </nav>
 
         <div className="sidebar-footer">
-          <button className="sidebar-connection" disabled={!pwa.isOnline} onClick={() => dropboxConnected ? setView('vaults') : void dropbox.connect()} title={!pwa.isOnline ? 'Device is offline' : dropboxConnected ? 'Dropbox ready' : 'Dropbox disconnected'} type="button">
-            <span className={`status-dot ${pwa.isOnline && dropboxConnected ? 'is-ready' : ''}`} />
-            <span className="sidebar-row-copy"><strong>Dropbox</strong><small>{!pwa.isOnline ? 'Offline' : dropbox.status === 'connecting' || dropbox.status === 'loading' ? 'Connecting' : dropboxConnected ? 'Ready' : dropbox.status === 'error' ? 'Needs attention' : 'Disconnected'}</small></span>
-          </button>
-          <button className="sidebar-sign-out" onClick={() => { vaultSessionRef.current?.close(); vaultSessionRef.current = null; dropbox.disconnect(); onLockApp() }} type="button">Sign out</button>
+          <div className="sidebar-footer-actions">
+            <button className="sidebar-sign-out" onClick={() => { vaultSessionRef.current?.close(); vaultSessionRef.current = null; dropbox.disconnect(); onLockApp() }} type="button">Sign out</button>
+            <button className="sidebar-app-lock" aria-label="Lock Meridium Keys" onClick={() => { vaultSessionRef.current?.close(); vaultSessionRef.current = null; onLockApp() }} title="Lock app" type="button"><Icon name="lock" size={18} /></button>
+          </div>
           <div className="sidebar-profile" title={profileName}>
             <span className="profile-avatar">{profileInitials}</span>
             <span className="sidebar-row-copy"><strong>{profileName}</strong><small>User profile</small></span>
@@ -671,17 +672,6 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
       </aside>
 
       <main className="workspace">
-        <header className="topbar">
-          <strong className="workspace-title">{workspaceTitle}</strong>
-          <div className="topbar-actions">
-            <div className={`connection-status ${pwa.isOnline && dropboxConnected ? 'is-connected' : ''} ${!pwa.isOnline ? 'is-offline' : ''}`}>
-              <span className="status-dot" />
-              <span>{!pwa.isOnline ? 'Offline' : dropbox.status === 'connecting' || dropbox.status === 'loading' ? 'Connecting Dropbox' : dropboxConnected ? 'Dropbox ready' : 'Not connected'}</span>
-            </div>
-            <button className="topbar-lock" aria-label="Lock Meridium Keys" onClick={() => { vaultSessionRef.current?.close(); vaultSessionRef.current = null; onLockApp() }} title="Lock app" type="button"><Icon name="lock" size={18} /></button>
-          </div>
-        </header>
-
         <section className={`content-stage ${activeView === 'browse' ? 'is-vault-open' : ''}`}>
           {activeView === 'connect' && (
             <div className="focus-card connect-card">

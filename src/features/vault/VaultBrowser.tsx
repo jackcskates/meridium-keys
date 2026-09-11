@@ -474,7 +474,7 @@ export function VaultBrowser({ vault, canEdit, onDeleteEntry, onDeleteGroup, onL
               onClick={() => selectUnfiledEntry(entry.id)}
               type="button"
             ><span className="unfiled-entry-mark"><EntryTypeIcon type={entry.type} /></span><span>{entry.title}</span></button>)}
-            {!unfiledEntries.length && <p>{draggedEntryId ? 'Drop here to remove from folder' : 'No entries outside folders'}</p>}
+            {!unfiledEntries.length && draggedEntryId && <p>Drop here to remove from folder</p>}
           </div>
         </div>
         {recycleBin && <div className="recycle-bin-dock"><button
@@ -485,9 +485,8 @@ export function VaultBrowser({ vault, canEdit, onDeleteEntry, onDeleteGroup, onL
         ><span>Recycle Bin</span><small>{recycleBin.entryCount}</small></button></div>}
       </aside>
       <section className="entry-list" aria-label="Vault entries">
-        <h2>Entries</h2>
-        {canEdit && activeEntries.length > 0 && <p aria-live="polite" className="entry-move-hint">{moveStatus || 'Drag an entry onto a folder to move it.'}</p>}
-        {visibleEntries.length ? visibleEntries.map((entry) => <div
+        {moveStatus && <p aria-live="polite" className="visually-hidden">{moveStatus}</p>}
+        {visibleEntries.map((entry) => <div
           className={`entry-row ${selectedEntryId === entry.id ? 'is-selected' : ''} ${draggedEntryId === entry.id ? 'is-dragging' : ''}`}
           key={entry.id}
         >
@@ -510,7 +509,7 @@ export function VaultBrowser({ vault, canEdit, onDeleteEntry, onDeleteGroup, onL
             title={`Drag ${entry.title} to a folder`}
             type="button"
           ><DragHandle /></button>}
-        </div>) : <p className="vault-empty-state">No entries here.</p>}
+        </div>)}
       </section>
       <section className="entry-detail" aria-label="Selected entry">
         {choosingType ? <div className="entry-type-picker"><div className="entry-editor-heading"><div><p className="eyebrow">New entry</p><h2>Choose a type</h2></div></div><p className="type-picker-copy">The type controls which fields appear in the entry.</p><div className="entry-type-grid">{entryTypeDefinitions.map((type) => <button key={type.id} onClick={() => chooseType(type.id)} type="button"><span className="entry-glyph"><EntryTypeIcon type={type.id} /></span><span><strong>{type.label}</strong><small>{type.description}</small></span></button>)}</div><button className="text-button" onClick={resetEntryEditor} type="button">Cancel</button></div> : draft && definition ? <form className="entry-editor" onSubmit={saveEntry}>
