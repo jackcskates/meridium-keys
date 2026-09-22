@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { deleteDropboxVault, downloadDropboxVault, listDropboxVaults, loadDropboxAccount, uploadDropboxVaultRevision, uploadNewDropboxVault } from './client'
+import { deleteDropboxVault, downloadDropboxVault, listDropboxVaults, loadDropboxAccount, renameDropboxVault, uploadDropboxVaultRevision, uploadNewDropboxVault } from './client'
 import type { DropboxSession, DropboxVaultFile } from './types'
 
 const session: DropboxSession = {
@@ -97,6 +97,39 @@ describe('Dropbox client', () => {
     }
 
     await expect(deleteDropboxVault(session, vault)).rejects.toThrow('changed or no longer exists')
+  })
+
+  it('renames the exact Dropbox vault without autorenaming a conflicting destination', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      metadata: {
+        '.tag': 'file',
+        id: 'id:vault',
+        name: 'Imported Passwords.kdbx',
+        path_display: '/Imported Passwords.kdbx',
+        rev: 'renamed-rev',
+        size: 1234,
+        server_modified: '2026-09-21T00:00:00Z',
+      },
+    }), { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+    const vault: DropboxVaultFile = {
+      id: 'id:vault',
+      name: '1Password.kdbx',
+      pathDisplay: '/1Password.kdbx',
+      rev: 'saved-rev',
+      size: 1234,
+      serverModified: '2026-09-21T00:00:00Z',
+    }
+
+    await expect(renameDropboxVault(session, vault, 'Imported Passwords.kdbx')).resolves.toMatchObject({ name: 'Imported Passwords.kdbx', rev: 'renamed-rev' })
+    const options = fetchMock.mock.calls[0][1] as RequestInit
+    expect(String(fetchMock.mock.calls[0][0])).toContain('files/move_v2')
+    expect(JSON.parse(String(options.body))).toEqual({
+      from_path: 'id:vault',
+      to_path: '/Imported Passwords.kdbx',
+      autorename: false,
+      allow_ownership_transfer: false,
+    })
   })
 
   it('maps an expired Dropbox token to a reconnect message', async () => {

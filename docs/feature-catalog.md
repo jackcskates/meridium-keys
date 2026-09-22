@@ -30,6 +30,10 @@ future possibilities.
 - Create and edit all ten confirmed entry types through type-specific forms.
 - Identify every entry type with its own Lucide icon before the entry title.
 - Delete entries into the standard KDBX Recycle Bin.
+- Select any number of entries in the current folder and permanently delete them
+  in one encrypted, revision-safe save after an explicit irreversible warning.
+- Rename an unlocked Dropbox vault by updating both its internal KDBX database
+  name and its encrypted Dropbox filename without allowing a conflicting copy.
 - Drag entries between real folders or “No folder” with mouse or touch, with a
   keyboard-accessible Move entry dialog for the same operation. The Recycle Bin
   is not a valid drop destination.
@@ -114,10 +118,12 @@ KeePass applications without requiring a proprietary file format.
 - Copy any populated protected field directly from the selected-entry detail
   view without opening Edit. Each value remains masked; only the requested
   field is decrypted by the vault worker and handed to the system clipboard.
+- Reveal any populated protected field from the selected-entry detail with an
+  adjacent eye action. Keep the value in memory only, hide it after 15 seconds,
+  and clear it immediately when the entry changes or the app loses focus.
 
 **Proposed:**
 
-- Make reveal temporary and reset it when the item, vault, or tab loses focus.
 - Clear copied secrets from the clipboard after a configurable delay where the
   platform permits it.
 - Never include secret values in notifications, URLs, DOM identifiers, logs, or

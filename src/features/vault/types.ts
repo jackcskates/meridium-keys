@@ -77,9 +77,11 @@ export type VaultWorkerRequest =
   | { type: 'get-protected-field'; entryId: string; fieldKey: string; requestId: string }
   | { type: 'prepare-entry-save'; entry: VaultEntryDraft; requestId: string }
   | { type: 'prepare-entry-delete'; entryId: string; requestId: string }
+  | { type: 'prepare-entries-permanent-delete'; entryIds: string[]; requestId: string }
   | { type: 'prepare-entry-move'; entryId: string; groupId: string; requestId: string }
   | { type: 'prepare-group-save'; group: VaultGroupDraft; requestId: string }
   | { type: 'prepare-group-delete'; groupId: string; requestId: string }
+  | { type: 'prepare-vault-rename'; databaseName: string; fileName: string; requestId: string }
   | { type: 'finish-change'; changeId: string; commit: boolean; requestId: string }
 
 export type VaultWorkerResponse =

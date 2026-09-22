@@ -557,6 +557,51 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
     return persistPreparedVaultChange(await session.prepareEntryDelete(entryId))
   }
 
+  async function deleteVaultEntriesForever(entryIds: string[]) {
+    const session = vaultSessionRef.current
+    if (!session) throw new Error('The vault is locked. Open it again before deleting entries.')
+    return persistPreparedVaultChange(await session.prepareEntriesPermanentDelete(entryIds))
+  }
+
+  async function renameOpenVault(name: string) {
+    const session = vaultSessionRef.current
+    const remoteVault = activeDropboxVault
+    if (!session || !remoteVault || selectedStorage !== 'dropbox') {
+      throw new Error('Open this vault from Dropbox before renaming it.')
+    }
+
+    const databaseName = name.trim()
+    const fileName = toVaultFileName(databaseName)
+    const duplicate = dropbox.vaults.some((vault) => vault.id !== remoteVault.id && vault.name.localeCompare(fileName, undefined, { sensitivity: 'accent' }) === 0)
+    if (duplicate) throw new Error(`A vault named ${databaseName} already exists in Dropbox.`)
+
+    const prepared = await session.prepareVaultRename(databaseName, fileName)
+    const encryptedFile = new File([prepared.data], remoteVault.name, { type: 'application/octet-stream' })
+    let savedVault: DropboxVaultFile
+    try {
+      savedVault = await dropbox.save(remoteVault, encryptedFile)
+    } catch (error) {
+      await session.finishChange(prepared.changeId, false)
+      throw error
+    }
+
+    const committedVault = await session.finishChange(prepared.changeId, true)
+    setActiveDropboxVault(savedVault)
+    setActiveDropboxVaultId(savedVault.id)
+    setSelectedVaultFile(encryptedFile)
+    setVaultSnapshot(committedVault)
+
+    const renamedVault = await dropbox.rename(savedVault, fileName)
+    const renamedFile = new File([prepared.data], renamedVault.name, { type: 'application/octet-stream' })
+    const renamedSnapshot = { ...committedVault, fileName: renamedVault.name }
+    setActiveDropboxVault(renamedVault)
+    setActiveDropboxVaultId(renamedVault.id)
+    setSelectedFile(renamedVault.name)
+    setSelectedVaultFile(renamedFile)
+    setVaultSnapshot(renamedSnapshot)
+    return renamedSnapshot
+  }
+
   async function moveVaultEntry(entryId: string, groupId: string) {
     const session = vaultSessionRef.current
     if (!session) throw new Error('The vault is locked. Open it again before moving an entry.')
@@ -827,6 +872,7 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
           {activeView === 'browse' && vaultSnapshot && (
             <VaultBrowser
               canEdit={selectedStorage === 'dropbox' && Boolean(activeDropboxVault)}
+              onDeleteEntriesForever={deleteVaultEntriesForever}
               onDeleteGroup={deleteVaultGroup}
               onDeleteEntry={deleteVaultEntry}
               onLoadEntry={(entryId) => {
@@ -839,6 +885,7 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
               }}
               onLock={lockVault}
               onMoveEntry={moveVaultEntry}
+              onRenameVault={renameOpenVault}
               onSaveGroup={saveVaultGroup}
               onSaveEntry={saveVaultEntry}
               vault={vaultSnapshot}

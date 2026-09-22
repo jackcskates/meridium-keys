@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { deleteDropboxVault, downloadDropboxVault, listDropboxVaults, loadDropboxAccount, uploadDropboxVaultRevision, uploadNewDropboxVault } from './client'
+import { deleteDropboxVault, downloadDropboxVault, listDropboxVaults, loadDropboxAccount, renameDropboxVault, uploadDropboxVaultRevision, uploadNewDropboxVault } from './client'
 import { forgetDropboxRefreshToken, loadDropboxRefreshToken, rememberDropboxRefreshToken } from './credentialStore'
 import { beginDropboxAuthorization, completeDropboxAuthorization, DropboxAuthError, refreshDropboxAuthorization } from './oauth'
 import type { DropboxConnectionStatus, DropboxSession, DropboxVaultFile } from './types'
@@ -133,6 +133,13 @@ export function useDropbox() {
     return updated
   }
 
+  async function rename(vault: DropboxVaultFile, fileName: string) {
+    if (!session) throw new Error('Connect Dropbox before renaming this vault.')
+    const renamed = await renameDropboxVault(session, vault, fileName)
+    await loadLibrary(session)
+    return renamed
+  }
+
   function disconnect() {
     void forgetDropboxRefreshToken().catch(() => undefined)
     setSession(null)
@@ -152,6 +159,7 @@ export function useDropbox() {
     download,
     upload,
     remove,
+    rename,
     save,
     refresh,
   }

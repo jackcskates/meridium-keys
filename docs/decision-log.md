@@ -311,6 +311,51 @@ they never existed; mark them superseded and link to the replacement.
   credential is being changed and repeatedly offers to overwrite an unrelated
   saved account password.
 
+### D-038 - Bulk permanent deletion and vault rename
+
+- **Status:** Accepted
+- **Decision:** Bulk selection is scoped to the entries visible in the current
+  folder. “Delete forever” bypasses the KDBX Recycle Bin, writes standard KDBX
+  deletion tombstones, removes now-unused binary data, and requires an explicit
+  irreversible confirmation. Renaming an unlocked Dropbox vault updates both
+  its KDBX metadata name and Dropbox filename, with duplicate-name rejection.
+- **Reason:** Large imported vaults need efficient gardening without repeated
+  single-entry recycle operations, and users must be able to replace inherited
+  import names while keeping a standard, portable KDBX file.
+
+### D-039 - Temporary protected-field reveal
+
+- **Status:** Accepted
+- **Decision:** Place an icon-only Reveal action beside Copy for each populated
+  protected field. Request only that field from the vault worker, keep its value
+  in volatile UI state, hide it automatically after 15 seconds, and clear it on
+  entry change, application blur, document backgrounding, or explicit hide.
+- **Reason:** Users need to inspect a protected value without entering Edit,
+  while temporary, field-scoped disclosure limits how long plaintext remains
+  rendered or retained in memory.
+
+### D-040 - Compact vault utility header
+
+- **Status:** Accepted
+- **Decision:** Preserve the vault name, rename action, KDBX version, entry
+  count, decrypted-memory status, and Lock in a compact two-line vault header.
+  Move Add into an adjacent action on the **Keys** section heading, where the
+  new entry appears, and keep bulk-selection utilities in that same local row.
+- **Reason:** The working panes are the primary task surface. A large title
+  block spends vertical space without adding utility, especially in compact PWA
+  windows and on phones.
+
+### D-041 - Resizable vault work columns
+
+- **Status:** Accepted
+- **Decision:** Desktop Folders, Keys, and entry-detail panes use two accessible
+  separators with pointer dragging, keyboard arrow resizing, minimum pane
+  widths, and double-click reset. Store only the non-sensitive width preference
+  on the current device. Keep the phone layout stacked without resize handles.
+- **Reason:** Imported vaults vary between long folder names, dense key lists,
+  and field-heavy records. Adjustable panes let the working surface match the
+  current task without compromising touch layouts or persisting vault content.
+
 ## Open
 
 ### D-005 - Standard KDBX compatibility

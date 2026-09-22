@@ -1,6 +1,6 @@
 # Implementation Status
 
-Last verified: 2026-09-11.
+Last verified: 2026-09-21.
 
 ## Working now
 
@@ -44,11 +44,25 @@ Last verified: 2026-09-11.
 - Three-pane group, entry, and detail browser on desktop, with a stacked phone
   layout. The working surface omits the redundant global header, empty local and
   unfiled messages, and the entry-column heading and drag instruction.
+- Accessible dividers resize the Folders, Keys, and detail columns by pointer or
+  keyboard, enforce useful minimum widths, reset on double-click, and remember
+  the non-sensitive sizing preference on that device. They disappear in the
+  stacked phone layout.
+- Compact two-line vault utility header keeps the vault name and rename action
+  above inline KDBX version, entry-count, and decrypted-memory status. Lock
+  remains a 44-pixel vault-level utility on the right, including on phones.
+- The entry column uses a compact **Keys** section heading. Its adjacent Add
+  action replaces the former prominent header CTA, and bulk selection shares
+  the same local utility area instead of consuming another toolbar row.
 - Masked protected-field presence without extracting protected values into the
   React snapshot.
 - Direct Copy controls beside every populated protected field in the selected
   entry. A click asks the worker for only that field and writes it to the system
   clipboard without opening Edit or storing the plaintext in React state.
+- Adjacent Reveal controls request only the chosen protected field from the
+  worker, display it in volatile component state for at most 15 seconds, and
+  clear it when hidden manually, when the selected entry changes, when the app
+  loses focus, or when the document moves to the background.
 - Conventional workspace utilities now use 44-pixel icon-only controls from the
   shared symbol vocabulary, with explicit accessible names: Back, Lock, Add,
   Create folder, Copy, Edit, Move, and Delete. Form submission and destructive
@@ -84,6 +98,13 @@ Last verified: 2026-09-11.
   randomized 20-character value with guaranteed uppercase, lowercase, number,
   and compatibility-focused symbol characters.
 - Delete entries into the standard KDBX Recycle Bin with explicit confirmation.
+- Bulk-select entries within the current folder and delete them permanently in
+  one encrypted save. Permanent deletion bypasses the KDBX Recycle Bin, records
+  KDBX deletion tombstones, cleans unused binary attachments, and requires an
+  explicit irreversible confirmation.
+- Rename an unlocked Dropbox vault from the working surface. Rename updates the
+  standard KDBX database name and the encrypted Dropbox filename, rejects a
+  conflicting filename, and never decrypts or transmits entry fields.
 - Move entries between real KDBX folders or back to “No folder” by dragging the
   dedicated handle with a mouse or touch pointer. A Move entry dialog provides
   the equivalent keyboard-accessible action. Recycle Bin is never a move target.
@@ -106,8 +127,8 @@ Last verified: 2026-09-11.
   values. The worker returns one plaintext protected value only in response to
   its explicit Copy action; entry editing remains the only operation that loads
   the complete typed entry into volatile React state.
-- Reveal outside the entry editor, search, local encrypted caching, automatic
-  clipboard clearing, and recovery are not part of this slice.
+- Search, local encrypted caching, automatic clipboard clearing, and recovery
+  are not part of this slice.
 - Local device files remain read only because a browser file selection does not
   grant safe overwrite access. Dropbox vaults support revision-safe entry updates.
 - The service worker precaches versioned app-shell assets only; it has no runtime
@@ -145,10 +166,12 @@ Last verified: 2026-09-11.
 - Automated Dropbox tests cover PKCE request/code exchange, cursor pagination,
   KDBX filtering, account identity, byte-preserving download, the direct upload
   response shape, incomplete-metadata reconciliation, no-overwrite creation,
-  name conflicts, revision-safe update and delete requests, conflicts, and
+  name conflicts, revision-safe update and delete requests, Dropbox rename
+  requests, conflicts, and
   expired-token errors, offline-access request and refresh, and encrypted
-  refresh-token storage. KDBX tests reopen added, edited, and deleted entries,
-  folder lifecycle changes, and all ten typed-entry schemas.
+  refresh-token storage. KDBX tests reopen added, edited, recycled, permanently
+  bulk-deleted, and renamed vault data, folder lifecycle changes, and all ten
+  typed-entry schemas.
 - A disposable live Dropbox vault completed folder create/rename, type-first API
   Key creation in “No folder,” entry edit and move, and the earlier non-empty
   folder recycle behavior on 2026-09-10. D-032 subsequently replaced that

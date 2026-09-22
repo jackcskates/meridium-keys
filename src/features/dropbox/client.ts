@@ -23,6 +23,10 @@ type AccountResponse = {
   name?: { display_name?: string }
 }
 
+type MoveResponse = {
+  metadata?: DropboxEntry
+}
+
 export class DropboxApiError extends Error {
   constructor(message: string) {
     super(message)
@@ -131,6 +135,38 @@ export async function deleteDropboxVault(session: DropboxSession, vault: Dropbox
         ? `${vault.name} changed or no longer exists in Dropbox. Refresh the library before trying again.`
         : `${vault.name} could not be deleted from Dropbox. Your vault was not changed.`)
   }
+}
+
+export async function renameDropboxVault(session: DropboxSession, vault: DropboxVaultFile, fileName: string) {
+  const finalSlash = vault.pathDisplay.lastIndexOf('/')
+  const parentPath = finalSlash > 0 ? vault.pathDisplay.slice(0, finalSlash) : ''
+  const destinationPath = `${parentPath}/${fileName}`
+  const response = await fetch(`${apiEndpoint}/files/move_v2`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${session.accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from_path: vault.id,
+      to_path: destinationPath,
+      autorename: false,
+      allow_ownership_transfer: false,
+    }),
+  })
+
+  if (!response.ok) {
+    const details = await response.text()
+    throw new DropboxApiError(response.status === 401
+      ? 'The Dropbox connection expired. Connect again before renaming this vault.'
+      : response.status === 409 && details.toLowerCase().includes('conflict')
+        ? `A vault named ${fileName.replace(/\.kdbx$/i, '')} already exists in Dropbox.`
+        : `${vault.name} was updated internally but its Dropbox filename could not be changed. Try renaming it again.`)
+  }
+
+  const moved = mapVault((await response.json() as MoveResponse).metadata || {} as DropboxEntry, true)
+  if (!moved) throw new DropboxApiError('Dropbox renamed the vault but returned incomplete file information. Refresh the library before editing it again.')
+  return moved
 }
 
 export async function uploadDropboxVaultRevision(session: DropboxSession, vault: DropboxVaultFile, file: File) {

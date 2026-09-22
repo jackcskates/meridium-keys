@@ -417,6 +417,50 @@ export async function prepareKdbxEntryDelete(database: Kdbx, entryId: string, fi
   }
 }
 
+export async function prepareKdbxEntriesPermanentDelete(database: Kdbx, entryIds: string[], fileName: string) {
+  const uniqueEntryIds = [...new Set(entryIds)]
+  if (!uniqueEntryIds.length) throw new VaultOpenError('WORKER_FAILURE', 'Select at least one entry to delete forever.')
+
+  try {
+    const clonedData = await database.save()
+    const workingDatabase = await Kdbx.load(clonedData, database.credentials)
+    const entries = uniqueEntryIds.map((entryId) => findEntry(workingDatabase, entryId))
+    if (entries.some((entry) => !entry)) {
+      throw new VaultOpenError('WORKER_FAILURE', 'One or more selected entries no longer exist in the open vault.')
+    }
+
+    for (const entry of entries) workingDatabase.move(entry!, null)
+    workingDatabase.cleanup({ customIcons: true, binaries: true })
+    const data = await workingDatabase.save()
+    return {
+      database: workingDatabase,
+      data,
+      vault: mapKdbxSnapshot(workingDatabase, fileName),
+    }
+  } catch (error) {
+    throw mapKdbxError(error)
+  }
+}
+
+export async function prepareKdbxVaultRename(database: Kdbx, databaseName: string, fileName: string) {
+  const name = databaseName.trim()
+  if (!name) throw new VaultOpenError('WORKER_FAILURE', 'Enter a name for this vault.')
+
+  try {
+    const clonedData = await database.save()
+    const workingDatabase = await Kdbx.load(clonedData, database.credentials)
+    workingDatabase.meta.name = name
+    const data = await workingDatabase.save()
+    return {
+      database: workingDatabase,
+      data,
+      vault: mapKdbxSnapshot(workingDatabase, fileName),
+    }
+  } catch (error) {
+    throw mapKdbxError(error)
+  }
+}
+
 export async function prepareKdbxEntryMove(database: Kdbx, entryId: string, groupId: string, fileName: string) {
   try {
     const clonedData = await database.save()

@@ -85,6 +85,12 @@ export class UnlockedVaultSession {
     return { changeId: message.changeId, data: message.data, vault: message.vault }
   }
 
+  async prepareEntriesPermanentDelete(entryIds: string[]): Promise<PreparedVaultChange> {
+    const message = await this.request((requestId) => ({ type: 'prepare-entries-permanent-delete', entryIds, requestId }))
+    if (message.type !== 'change-prepared') throw new VaultOpenError('WORKER_FAILURE', 'The secure vault worker returned an unexpected permanent delete response.')
+    return { changeId: message.changeId, data: message.data, vault: message.vault }
+  }
+
   async prepareEntryMove(entryId: string, groupId: string): Promise<PreparedVaultChange> {
     const message = await this.request((requestId) => ({ type: 'prepare-entry-move', entryId, groupId, requestId }))
     if (message.type !== 'change-prepared') throw new VaultOpenError('WORKER_FAILURE', 'The secure vault worker returned an unexpected move response.')
@@ -100,6 +106,12 @@ export class UnlockedVaultSession {
   async prepareGroupDelete(groupId: string): Promise<PreparedVaultChange> {
     const message = await this.request((requestId) => ({ type: 'prepare-group-delete', groupId, requestId }))
     if (message.type !== 'change-prepared') throw new VaultOpenError('WORKER_FAILURE', 'The secure vault worker returned an unexpected folder delete response.')
+    return { changeId: message.changeId, data: message.data, vault: message.vault }
+  }
+
+  async prepareVaultRename(databaseName: string, fileName: string): Promise<PreparedVaultChange> {
+    const message = await this.request((requestId) => ({ type: 'prepare-vault-rename', databaseName, fileName, requestId }))
+    if (message.type !== 'change-prepared') throw new VaultOpenError('WORKER_FAILURE', 'The secure vault worker returned an unexpected vault rename response.')
     return { changeId: message.changeId, data: message.data, vault: message.vault }
   }
 

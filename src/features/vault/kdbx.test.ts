@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DOMParser as XmlDomParser, XMLSerializer as XmlSerializer } from '@xmldom/xmldom'
 import { Consts, Credentials, Kdbx, ProtectedValue } from 'kdbxweb'
-import { configureArgon2, createKdbxData, loadKdbxDatabase, prepareKdbxEntryDelete, prepareKdbxEntryMove, prepareKdbxEntrySave, prepareKdbxGroupDelete, prepareKdbxGroupSave, readKdbxEntryDetails, readKdbxProtectedField, readKdbxSnapshot, VaultOpenError } from './kdbx'
+import { configureArgon2, createKdbxData, loadKdbxDatabase, prepareKdbxEntriesPermanentDelete, prepareKdbxEntryDelete, prepareKdbxEntryMove, prepareKdbxEntrySave, prepareKdbxGroupDelete, prepareKdbxGroupSave, prepareKdbxVaultRename, readKdbxEntryDetails, readKdbxProtectedField, readKdbxSnapshot, VaultOpenError } from './kdbx'
 import { createEmptyEntryDraft, entryTypeDefinitions } from './entryTypes'
 
 // kdbxweb uses browser-native XML APIs in production. Supply the current,
@@ -187,6 +187,44 @@ describe('readKdbxSnapshot', () => {
     expect(deleted).toMatchObject({ isDeleted: true })
     expect(reopened.entries.filter((entry) => !entry.isDeleted)).toHaveLength(0)
     expect(reopened.groups.some((group) => group.isRecycleBin)).toBe(true)
+  })
+
+  it('permanently deletes multiple selected entries in one encrypted change', async () => {
+    const original = await createFixture(Consts.KdfId.Argon2id)
+    let database = await loadKdbxDatabase(original, fixturePassword)
+    const initial = await readKdbxSnapshot(original, fixturePassword)
+    const retained = await prepareKdbxEntrySave(database, {
+      groupId: initial.entries[0].groupId,
+      type: 'login',
+      title: 'Keep This Entry',
+      fields: { username: 'keep@example.test', password: 'keep-secret' },
+    }, 'fixture.kdbx')
+    database = retained.database
+    const removed = await prepareKdbxEntrySave(database, {
+      groupId: initial.entries[0].groupId,
+      type: 'note',
+      title: 'Delete This Entry',
+      fields: { notes: 'temporary note' },
+    }, 'fixture.kdbx')
+
+    const prepared = await prepareKdbxEntriesPermanentDelete(removed.database, [initial.entries[0].id, removed.entryId], 'fixture.kdbx')
+    const reopened = await loadKdbxDatabase(prepared.data, fixturePassword)
+    const snapshot = await readKdbxSnapshot(prepared.data, fixturePassword, 'fixture.kdbx')
+
+    expect(snapshot.entries.map((entry) => entry.title)).toEqual(['Keep This Entry'])
+    expect(snapshot.entries.some((entry) => entry.isDeleted)).toBe(false)
+    expect(reopened.deletedObjects.map((item) => item.uuid?.toString())).toEqual(expect.arrayContaining([initial.entries[0].id, removed.entryId]))
+  })
+
+  it('renames the KDBX metadata without changing its entries or credentials', async () => {
+    const original = await createFixture(Consts.KdfId.Aes)
+    const database = await loadKdbxDatabase(original, fixturePassword)
+    const prepared = await prepareKdbxVaultRename(database, 'Imported Passwords', 'Imported Passwords.kdbx')
+    const reopened = await readKdbxSnapshot(prepared.data, fixturePassword, 'Imported Passwords.kdbx')
+
+    expect(reopened).toMatchObject({ databaseName: 'Imported Passwords', fileName: 'Imported Passwords.kdbx' })
+    expect(reopened.entries).toContainEqual(expect.objectContaining({ title: 'Example Account' }))
+    await expect(readKdbxSnapshot(prepared.data, 'wrong password')).rejects.toMatchObject({ code: 'INVALID_CREDENTIALS' })
   })
 
   it('moves an entry between folders without exposing or changing its protected fields', async () => {

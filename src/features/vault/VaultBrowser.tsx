@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react'
-import { Check, Copy, Ellipsis, FolderInput, LoaderCircle, LockKeyhole, Pencil, Plus, Trash2 } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
+import { Check, CheckSquare, Copy, Ellipsis, Eye, EyeOff, FolderInput, ListChecks, LoaderCircle, LockKeyhole, Pencil, Plus, Square, Trash2, X } from 'lucide-react'
+import { clampVaultColumnWidths, columnResizeHandleWidth, detailColumnMinWidth, entryColumnMinWidth, folderColumnMinWidth, type ColumnWidths } from './columnSizing'
 import { copyProtectedText } from './copyProtectedText'
 import { EntryTypeIcon } from './EntryTypeIcon'
 import { createEmptyEntryDraft, entryTypeDefinitions, entryTypeLabel, getEntryTypeDefinition, type EntryFieldDefinition } from './entryTypes'
@@ -10,16 +11,35 @@ type VaultBrowserProps = {
   vault: VaultSnapshot
   canEdit: boolean
   onDeleteEntry: (entryId: string) => Promise<VaultSnapshot>
+  onDeleteEntriesForever: (entryIds: string[]) => Promise<VaultSnapshot>
   onDeleteGroup: (groupId: string) => Promise<VaultSnapshot>
   onLoadEntry: (entryId: string) => Promise<VaultEntryDetails>
   onReadProtectedField: (entryId: string, fieldKey: string) => Promise<string>
   onLock: () => void
   onMoveEntry: (entryId: string, groupId: string) => Promise<{ entryId: string; vault: VaultSnapshot }>
+  onRenameVault: (name: string) => Promise<VaultSnapshot>
   onSaveEntry: (entry: VaultEntryDraft) => Promise<{ entryId: string; vault: VaultSnapshot }>
   onSaveGroup: (group: VaultGroupDraft) => Promise<{ groupId: string; vault: VaultSnapshot }>
 }
 
 const entryDragMime = 'application/x-meridium-vault-entry'
+const columnWidthStorageKey = 'meridium-keys-vault-column-widths'
+
+type ResizedColumn = 'folders' | 'entries'
+
+function loadColumnWidths(): ColumnWidths | null {
+  try {
+    const stored = JSON.parse(localStorage.getItem(columnWidthStorageKey) || 'null') as Partial<ColumnWidths> | null
+    if (!stored || typeof stored.folders !== 'number' || typeof stored.entries !== 'number') return null
+    if (!Number.isFinite(stored.folders) || !Number.isFinite(stored.entries)) return null
+    return {
+      folders: Math.max(folderColumnMinWidth, stored.folders),
+      entries: Math.max(entryColumnMinWidth, stored.entries),
+    }
+  } catch {
+    return null
+  }
+}
 
 function DialogShell({ labelledBy, describedBy, children, onCancel, locked = false }: {
   labelledBy: string
@@ -50,6 +70,38 @@ function DeleteEntryDialog({ entry, isDeleting, error, onCancel, onDelete }: {
     {error && <p className="unlock-error" role="alert">{error}</p>}
     <div className="confirm-dialog-actions"><button className="button button-secondary" disabled={isDeleting} onClick={onCancel} type="button">Cancel</button><button className="button button-danger" disabled={isDeleting} onClick={onDelete} type="button">{isDeleting ? 'Deleting…' : `Delete ${entry.title}`}</button></div>
   </div></DialogShell>
+}
+
+function DeleteEntriesForeverDialog({ entries, isDeleting, error, onCancel, onDelete }: {
+  entries: VaultEntrySummary[]
+  isDeleting: boolean
+  error: string
+  onCancel: () => void
+  onDelete: () => void
+}) {
+  const count = entries.length
+  return <DialogShell describedBy="delete-entries-forever-description" labelledBy="delete-entries-forever-title" locked={isDeleting} onCancel={onCancel}><div className="confirm-dialog-card">
+    <span className="confirm-dialog-icon"><Trash2 aria-hidden="true" size={24} /></span>
+    <div className="confirm-dialog-copy"><p className="eyebrow">Permanent deletion</p><h2 id="delete-entries-forever-title">Delete {count} {count === 1 ? 'entry' : 'entries'} forever?</h2><p id="delete-entries-forever-description">This bypasses the KDBX Recycle Bin and cannot be undone in Keys. Dropbox file history may retain an older encrypted vault version for a limited time.</p></div>
+    {error && <p className="unlock-error" role="alert">{error}</p>}
+    <div className="confirm-dialog-actions"><button className="button button-secondary" disabled={isDeleting} onClick={onCancel} type="button">Cancel</button><button className="button button-danger" disabled={isDeleting} onClick={onDelete} type="button">{isDeleting ? 'Deleting forever…' : `Delete ${count} forever`}</button></div>
+  </div></DialogShell>
+}
+
+function RenameVaultDialog({ currentName, isSaving, error, onCancel, onSave }: {
+  currentName: string
+  isSaving: boolean
+  error: string
+  onCancel: () => void
+  onSave: (name: string) => void
+}) {
+  const [name, setName] = useState(currentName)
+  return <DialogShell labelledBy="rename-vault-title" locked={isSaving} onCancel={onCancel}><form className="confirm-dialog-card" onSubmit={(event) => { event.preventDefault(); onSave(name) }}>
+    <div className="confirm-dialog-copy"><p className="eyebrow">Vault settings</p><h2 id="rename-vault-title">Rename vault</h2><p>This changes both the name inside the KDBX database and its encrypted Dropbox filename.</p></div>
+    <label className="field"><span>Vault name</span><input autoFocus autoComplete="off" disabled={isSaving} maxLength={80} onChange={(event) => setName(event.target.value)} required value={name} /></label>
+    {error && <p className="unlock-error" role="alert">{error}</p>}
+    <div className="confirm-dialog-actions"><button className="button button-secondary" disabled={isSaving} onClick={onCancel} type="button">Cancel</button><button className="button button-primary" disabled={isSaving || !name.trim() || (name.trim() === currentName && !error)} type="submit">{isSaving ? 'Renaming…' : 'Rename vault'}</button></div>
+  </form></DialogShell>
 }
 
 function GroupNameDialog({ group, rootGroupId, isSaving, error, onCancel, onSave }: {
@@ -119,7 +171,7 @@ function MoveEntryDialog({ entry, vault, isMoving, error, onCancel, onMove }: {
   </form></DialogShell>
 }
 
-export function VaultBrowser({ vault, canEdit, onDeleteEntry, onDeleteGroup, onLoadEntry, onLock, onMoveEntry, onReadProtectedField, onSaveEntry, onSaveGroup }: VaultBrowserProps) {
+export function VaultBrowser({ vault, canEdit, onDeleteEntry, onDeleteEntriesForever, onDeleteGroup, onLoadEntry, onLock, onMoveEntry, onReadProtectedField, onRenameVault, onSaveEntry, onSaveGroup }: VaultBrowserProps) {
   const activeEntries = useMemo(() => vault.entries.filter((entry) => !entry.isDeleted), [vault.entries])
   const unfiledEntries = useMemo(() => activeEntries.filter((entry) => entry.groupId === vault.rootGroupId), [activeEntries, vault.rootGroupId])
   const activeGroups = useMemo(() => vault.groups.filter((group) => !group.isRecycleBin), [vault.groups])
@@ -141,8 +193,18 @@ export function VaultBrowser({ vault, canEdit, onDeleteEntry, onDeleteGroup, onL
   const [isSaving, setIsSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
   const [entryToDelete, setEntryToDelete] = useState<VaultEntrySummary | null>(null)
+  const [selectionMode, setSelectionMode] = useState(false)
+  const [selectedEntryIds, setSelectedEntryIds] = useState<Set<string>>(() => new Set())
+  const selectedVisibleEntryIds = useMemo(() => {
+    const visibleIds = new Set(visibleEntries.map((entry) => entry.id))
+    return new Set([...selectedEntryIds].filter((entryId) => visibleIds.has(entryId)))
+  }, [selectedEntryIds, visibleEntries])
+  const [entriesToDeleteForever, setEntriesToDeleteForever] = useState<VaultEntrySummary[]>([])
   const [isDeleting, setIsDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
+  const [renameDialogOpen, setRenameDialogOpen] = useState(false)
+  const [isRenaming, setIsRenaming] = useState(false)
+  const [renameError, setRenameError] = useState('')
   const [groupDialog, setGroupDialog] = useState<VaultGroupSummary | 'new' | null>(null)
   const [groupToDelete, setGroupToDelete] = useState<VaultGroupSummary | null>(null)
   const [openGroupMenuId, setOpenGroupMenuId] = useState('')
@@ -155,8 +217,15 @@ export function VaultBrowser({ vault, canEdit, onDeleteEntry, onDeleteGroup, onL
   const [moveError, setMoveError] = useState('')
   const [moveStatus, setMoveStatus] = useState('')
   const [copyState, setCopyState] = useState<{ entryId: string; fieldKey: string; status: 'copying' | 'copied' | 'error'; message: string } | null>(null)
+  const [revealState, setRevealState] = useState<{ entryId: string; fieldKey: string; status: 'loading' | 'revealed' | 'error'; value: string; message: string } | null>(null)
+  const revealRequestIdRef = useRef(0)
   const nativeDragEntryIdRef = useRef('')
   const pointerDragRef = useRef<{ pointerId: number; entryId: string; targetGroupId: string } | null>(null)
+  const [columnWidths, setColumnWidths] = useState<ColumnWidths | null>(loadColumnWidths)
+  const columnResizeRef = useRef<{ pointerId: number; column: ResizedColumn; startX: number; startWidths: ColumnWidths } | null>(null)
+  const vaultGridRef = useRef<HTMLDivElement>(null)
+  const folderColumnRef = useRef<HTMLElement>(null)
+  const entryColumnRef = useRef<HTMLElement>(null)
   const groupMenuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -183,11 +252,112 @@ export function VaultBrowser({ vault, canEdit, onDeleteEntry, onDeleteGroup, onL
     return () => window.clearTimeout(timeout)
   }, [copyState])
 
+  useEffect(() => {
+    if (!columnWidths) return
+    localStorage.setItem(columnWidthStorageKey, JSON.stringify(columnWidths))
+  }, [columnWidths])
+
+  useEffect(() => {
+    const grid = vaultGridRef.current
+    if (!grid || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(() => {
+      setColumnWidths((current) => current ? clampColumnWidths(current, grid.getBoundingClientRect().width) : current)
+    })
+    observer.observe(grid)
+    return () => observer.disconnect()
+  }, [])
+
+  useEffect(() => {
+    if (revealState?.status !== 'revealed') return
+    const timeout = window.setTimeout(() => {
+      revealRequestIdRef.current += 1
+      setRevealState(null)
+    }, 15_000)
+    return () => window.clearTimeout(timeout)
+  }, [revealState])
+
+  useEffect(() => {
+    const hideRevealedValue = () => {
+      revealRequestIdRef.current += 1
+      setRevealState(null)
+    }
+    const hideWhenBackgrounded = () => {
+      if (document.visibilityState === 'hidden') hideRevealedValue()
+    }
+    window.addEventListener('blur', hideRevealedValue)
+    document.addEventListener('visibilitychange', hideWhenBackgrounded)
+    return () => {
+      window.removeEventListener('blur', hideRevealedValue)
+      document.removeEventListener('visibilitychange', hideWhenBackgrounded)
+    }
+  }, [])
+
+  function hideRevealedField() {
+    revealRequestIdRef.current += 1
+    setRevealState(null)
+  }
+
+  function currentColumnWidths() {
+    return {
+      folders: folderColumnRef.current?.getBoundingClientRect().width || folderColumnMinWidth,
+      entries: entryColumnRef.current?.getBoundingClientRect().width || entryColumnMinWidth,
+    }
+  }
+
+  function clampColumnWidths(widths: ColumnWidths, gridWidth = vaultGridRef.current?.getBoundingClientRect().width || 0): ColumnWidths {
+    return clampVaultColumnWidths(widths, gridWidth)
+  }
+
+  function beginColumnResize(event: ReactPointerEvent<HTMLDivElement>, column: ResizedColumn) {
+    if (event.pointerType === 'mouse' && event.button !== 0) return
+    event.preventDefault()
+    event.currentTarget.setPointerCapture(event.pointerId)
+    columnResizeRef.current = { pointerId: event.pointerId, column, startX: event.clientX, startWidths: currentColumnWidths() }
+    event.currentTarget.dataset.resizing = 'true'
+  }
+
+  function continueColumnResize(event: ReactPointerEvent<HTMLDivElement>) {
+    const resize = columnResizeRef.current
+    if (!resize || resize.pointerId !== event.pointerId) return
+    event.preventDefault()
+    const delta = event.clientX - resize.startX
+    const next = resize.column === 'folders'
+      ? { ...resize.startWidths, folders: resize.startWidths.folders + delta }
+      : { ...resize.startWidths, entries: resize.startWidths.entries + delta }
+    setColumnWidths(clampColumnWidths(next))
+  }
+
+  function finishColumnResize(event: ReactPointerEvent<HTMLDivElement>) {
+    const resize = columnResizeRef.current
+    if (!resize || resize.pointerId !== event.pointerId) return
+    columnResizeRef.current = null
+    delete event.currentTarget.dataset.resizing
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
+  }
+
+  function resizeColumnWithKeyboard(event: ReactKeyboardEvent<HTMLDivElement>, column: ResizedColumn) {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+    event.preventDefault()
+    const direction = event.key === 'ArrowRight' ? 1 : -1
+    const step = event.shiftKey ? 32 : 12
+    const current = columnWidths || currentColumnWidths()
+    const next = column === 'folders'
+      ? { ...current, folders: current.folders + direction * step }
+      : { ...current, entries: current.entries + direction * step }
+    setColumnWidths(clampColumnWidths(next))
+  }
+
+  function resetColumnWidths() {
+    localStorage.removeItem(columnWidthStorageKey)
+    setColumnWidths(null)
+  }
+
   function resetEntryEditor() {
     setDraft(null)
     setChoosingType(false)
     setVisibleSecrets(new Set())
     setSaveError('')
+    hideRevealedField()
   }
 
   function selectGroup(groupId: string) {
@@ -197,6 +367,8 @@ export function VaultBrowser({ vault, canEdit, onDeleteEntry, onDeleteGroup, onL
     const isRecycleRoot = group?.isRecycleBin && group.parentGroupId === vault.rootGroupId
     const firstEntry = groupId === vault.rootGroupId ? unfiledEntries[0] : vault.entries.find((entry) => entry.groupId === groupId || (isRecycleRoot && entry.isDeleted))
     setSelectedEntryId(firstEntry?.id ?? '')
+    setSelectionMode(false)
+    setSelectedEntryIds(new Set())
     resetEntryEditor()
   }
 
@@ -207,6 +379,7 @@ export function VaultBrowser({ vault, canEdit, onDeleteEntry, onDeleteGroup, onL
   }
 
   function beginCreate() {
+    hideRevealedField()
     setDraft(null)
     setChoosingType(true)
     setVisibleSecrets(new Set())
@@ -220,6 +393,7 @@ export function VaultBrowser({ vault, canEdit, onDeleteEntry, onDeleteGroup, onL
   }
 
   async function beginEdit(entry: VaultEntrySummary) {
+    hideRevealedField()
     setIsLoadingEntry(true)
     setSaveError('')
     try {
@@ -244,6 +418,32 @@ export function VaultBrowser({ vault, canEdit, onDeleteEntry, onDeleteGroup, onL
         fieldKey: field.key,
         status: 'error',
         message: error instanceof Error ? error.message : `${field.label} could not be copied.`,
+      })
+    }
+  }
+
+  async function toggleProtectedFieldReveal(entry: VaultEntrySummary, field: EntryFieldDefinition) {
+    const isCurrent = revealState?.entryId === entry.id && revealState.fieldKey === field.key
+    if (isCurrent && revealState.status !== 'error') {
+      hideRevealedField()
+      return
+    }
+
+    const requestId = revealRequestIdRef.current + 1
+    revealRequestIdRef.current = requestId
+    setRevealState({ entryId: entry.id, fieldKey: field.key, status: 'loading', value: '', message: `Revealing ${field.label.toLowerCase()}…` })
+    try {
+      const value = await onReadProtectedField(entry.id, field.key)
+      if (revealRequestIdRef.current !== requestId) return
+      setRevealState({ entryId: entry.id, fieldKey: field.key, status: 'revealed', value, message: `${field.label} revealed for 15 seconds.` })
+    } catch (error) {
+      if (revealRequestIdRef.current !== requestId) return
+      setRevealState({
+        entryId: entry.id,
+        fieldKey: field.key,
+        status: 'error',
+        value: '',
+        message: error instanceof Error ? error.message : `${field.label} could not be revealed.`,
       })
     }
   }
@@ -276,6 +476,51 @@ export function VaultBrowser({ vault, canEdit, onDeleteEntry, onDeleteGroup, onL
       setDeleteError(error instanceof Error ? error.message : 'The entry could not be deleted safely.')
     } finally {
       setIsDeleting(false)
+    }
+  }
+
+  function toggleEntrySelection(entryId: string) {
+    setSelectedEntryIds((current) => {
+      const next = new Set(current)
+      if (next.has(entryId)) next.delete(entryId)
+      else next.add(entryId)
+      return next
+    })
+  }
+
+  function stopSelecting() {
+    setSelectionMode(false)
+    setSelectedEntryIds(new Set())
+    setDeleteError('')
+  }
+
+  async function deleteEntriesForever() {
+    if (!entriesToDeleteForever.length) return
+    setIsDeleting(true)
+    setDeleteError('')
+    try {
+      await onDeleteEntriesForever(entriesToDeleteForever.map((entry) => entry.id))
+      setSelectedEntryId('')
+      setEntriesToDeleteForever([])
+      stopSelecting()
+      resetEntryEditor()
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : 'The selected entries could not be deleted safely.')
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
+  async function renameVault(name: string) {
+    setIsRenaming(true)
+    setRenameError('')
+    try {
+      await onRenameVault(name)
+      setRenameDialogOpen(false)
+    } catch (error) {
+      setRenameError(error instanceof Error ? error.message : 'The vault could not be renamed safely.')
+    } finally {
+      setIsRenaming(false)
     }
   }
 
@@ -421,12 +666,17 @@ export function VaultBrowser({ vault, canEdit, onDeleteEntry, onDeleteGroup, onL
   const selectedProtectedFields = selectedEntry
     ? getEntryTypeDefinition(selectedEntry.type).fields.filter((field) => selectedEntry.protectedFieldKeys.includes(field.key))
     : []
+  const gridWidth = vaultGridRef.current?.getBoundingClientRect().width || 1200
+  const folderWidthNow = Math.round(columnWidths?.folders || folderColumnRef.current?.getBoundingClientRect().width || folderColumnMinWidth)
+  const entryWidthNow = Math.round(columnWidths?.entries || entryColumnRef.current?.getBoundingClientRect().width || entryColumnMinWidth)
+  const folderWidthMax = Math.max(folderColumnMinWidth, Math.round(gridWidth - entryColumnMinWidth - detailColumnMinWidth - columnResizeHandleWidth * 2))
+  const entryWidthMax = Math.max(entryColumnMinWidth, Math.round(gridWidth - folderColumnMinWidth - detailColumnMinWidth - columnResizeHandleWidth * 2))
 
   return <div className="vault-browser">
-    <header className="vault-browser-header"><div className="vault-browser-title"><p className="eyebrow">KDBX {vault.version}</p><h1>{vault.databaseName}</h1><p>{activeEntries.length} {activeEntries.length === 1 ? 'entry' : 'entries'} · decrypted in memory</p></div><div className="vault-browser-actions"><button aria-label="Lock vault" className="button button-secondary button-icon" onClick={onLock} title="Lock vault" type="button"><LockKeyhole aria-hidden="true" /></button><button aria-label="Add entry" className="button button-primary button-icon" disabled={!canEdit || isSaving || isDeleting} onClick={beginCreate} title={canEdit ? 'Add entry' : 'Dropbox vaults can be edited; local files remain read only.'} type="button"><Plus aria-hidden="true" /></button></div></header>
+    <header className="vault-browser-header"><div className="vault-browser-title"><div className="vault-browser-name-row"><h1>{vault.databaseName}</h1>{canEdit && <button aria-label="Rename vault" className="vault-name-action" disabled={isRenaming || isDeleting} onClick={() => { setRenameError(''); setRenameDialogOpen(true) }} title="Rename vault" type="button"><Pencil aria-hidden="true" size={15} /></button>}</div><p className="vault-browser-meta"><span>KDBX {vault.version}</span><span>{activeEntries.length} {activeEntries.length === 1 ? 'entry' : 'entries'}</span><span>Decrypted in memory</span></p></div><div className="vault-browser-actions"><button aria-label="Lock vault" className="button button-secondary button-icon" onClick={onLock} title="Lock vault" type="button"><LockKeyhole aria-hidden="true" /></button></div></header>
     {!canEdit && <p className="read-only-note">This device file is open read only. Connect and open its Dropbox copy to add or edit entries.</p>}
-    <div className="vault-browser-grid">
-      <aside className="group-list" aria-label="Vault folders">
+    <div className="vault-browser-grid" ref={vaultGridRef} style={columnWidths ? { gridTemplateColumns: `${columnWidths.folders}px ${columnResizeHandleWidth}px ${columnWidths.entries}px ${columnResizeHandleWidth}px minmax(${detailColumnMinWidth}px, 1fr)` } : undefined}>
+      <aside className="group-list" aria-label="Vault folders" ref={folderColumnRef}>
         <div className="panel-heading"><h2>Folders</h2>{canEdit && <button aria-label="Create folder" className="panel-action" onClick={() => { setGroupError(''); setGroupDialog('new') }} title="Create folder" type="button"><Plus aria-hidden="true" size={17} /></button>}</div>
         <div className="group-list-scroll">
           <div className="folder-items">
@@ -484,21 +734,45 @@ export function VaultBrowser({ vault, canEdit, onDeleteEntry, onDeleteGroup, onL
           type="button"
         ><span>Recycle Bin</span><small>{recycleBin.entryCount}</small></button></div>}
       </aside>
-      <section className="entry-list" aria-label="Vault entries">
+      <div
+        aria-label="Resize Folders and Keys columns"
+        aria-orientation="vertical"
+        aria-valuemax={folderWidthMax}
+        aria-valuemin={folderColumnMinWidth}
+        aria-valuenow={folderWidthNow}
+        className="column-resizer"
+        onDoubleClick={resetColumnWidths}
+        onKeyDown={(event) => resizeColumnWithKeyboard(event, 'folders')}
+        onPointerCancel={finishColumnResize}
+        onPointerDown={(event) => beginColumnResize(event, 'folders')}
+        onPointerMove={continueColumnResize}
+        onPointerUp={finishColumnResize}
+        role="separator"
+        tabIndex={0}
+        title="Resize Folders and Keys. Use arrow keys or drag; double-click to reset."
+      />
+      <section className="entry-list" aria-label="Vault entries" ref={entryColumnRef}>
         {moveStatus && <p aria-live="polite" className="visually-hidden">{moveStatus}</p>}
+        <div className={`panel-heading entry-panel-heading ${selectionMode ? 'is-selecting' : ''}`}><span className="entry-panel-title"><h2>Keys</h2>{selectionMode && <small aria-live="polite">{selectedVisibleEntryIds.size} selected</small>}</span><span className="entry-selection-actions">
+          {selectionMode ? <>
+              <button aria-label={selectedVisibleEntryIds.size === visibleEntries.length ? 'Clear selection' : `Select all ${visibleEntries.length} entries`} className="panel-action" disabled={isDeleting} onClick={() => setSelectedEntryIds(selectedVisibleEntryIds.size === visibleEntries.length ? new Set() : new Set(visibleEntries.map((entry) => entry.id)))} title={selectedVisibleEntryIds.size === visibleEntries.length ? 'Clear selection' : 'Select all'} type="button">{selectedVisibleEntryIds.size === visibleEntries.length ? <CheckSquare aria-hidden="true" size={18} /> : <ListChecks aria-hidden="true" size={18} />}</button>
+              <button aria-label="Delete selected entries forever" className="panel-action is-danger" disabled={!selectedVisibleEntryIds.size || isDeleting} onClick={() => { setDeleteError(''); setEntriesToDeleteForever(visibleEntries.filter((entry) => selectedVisibleEntryIds.has(entry.id))) }} title="Delete selected forever" type="button"><Trash2 aria-hidden="true" size={18} /></button>
+              <button aria-label="Stop selecting entries" className="panel-action" disabled={isDeleting} onClick={stopSelecting} title="Done selecting" type="button"><X aria-hidden="true" size={18} /></button>
+          </> : <>{canEdit && visibleEntries.length > 0 && <button aria-label="Select multiple entries" className="panel-action" onClick={() => { setSelectionMode(true); setSelectedEntryIds(new Set()) }} title="Select multiple entries" type="button"><ListChecks aria-hidden="true" size={17} /></button>}{canEdit && <button aria-label="Add entry" className="panel-action" disabled={isSaving || isDeleting} onClick={beginCreate} title="Add entry" type="button"><Plus aria-hidden="true" size={17} /></button>}</>}
+        </span></div>
         {visibleEntries.map((entry) => <div
-          className={`entry-row ${selectedEntryId === entry.id ? 'is-selected' : ''} ${draggedEntryId === entry.id ? 'is-dragging' : ''}`}
+          className={`entry-row ${!selectionMode && selectedEntryId === entry.id ? 'is-selected' : ''} ${selectionMode && selectedVisibleEntryIds.has(entry.id) ? 'is-bulk-selected' : ''} ${draggedEntryId === entry.id ? 'is-dragging' : ''} ${selectionMode ? 'is-selecting' : ''}`}
           key={entry.id}
         >
           <button
             className="entry-row-open"
-            draggable={canEdit && !entry.isDeleted && !isMovingEntry}
-            onClick={() => { setSelectedEntryId(entry.id); resetEntryEditor() }}
+            draggable={!selectionMode && canEdit && !entry.isDeleted && !isMovingEntry}
+            onClick={() => { if (selectionMode) toggleEntrySelection(entry.id); else { setSelectedEntryId(entry.id); resetEntryEditor() } }}
             onDragEnd={() => { const wasActive = Boolean(nativeDragEntryIdRef.current); clearDragState(); if (wasActive && !isMovingEntry) setMoveStatus('Move canceled. Drop entries on No folder or another folder.') }}
             onDragStart={(event) => beginNativeDrag(event, entry)}
             type="button"
-          ><span className="entry-glyph"><EntryTypeIcon type={entry.type} /></span><span><strong>{entry.title}</strong><small>{entry.subtitle}</small></span></button>
-          {canEdit && !entry.isDeleted && <button
+          >{selectionMode && <span className="entry-selection-mark" aria-hidden="true">{selectedVisibleEntryIds.has(entry.id) ? <CheckSquare size={19} /> : <Square size={19} />}</span>}<span className="entry-glyph"><EntryTypeIcon type={entry.type} /></span><span><strong>{entry.title}</strong><small>{entry.subtitle}</small></span></button>
+          {!selectionMode && canEdit && !entry.isDeleted && <button
             aria-label={`Drag ${entry.title} to a folder`}
             className="entry-drag-handle"
             disabled={isMovingEntry}
@@ -511,8 +785,25 @@ export function VaultBrowser({ vault, canEdit, onDeleteEntry, onDeleteGroup, onL
           ><DragHandle /></button>}
         </div>)}
       </section>
+      <div
+        aria-label="Resize Keys and entry detail columns"
+        aria-orientation="vertical"
+        aria-valuemax={entryWidthMax}
+        aria-valuemin={entryColumnMinWidth}
+        aria-valuenow={entryWidthNow}
+        className="column-resizer"
+        onDoubleClick={resetColumnWidths}
+        onKeyDown={(event) => resizeColumnWithKeyboard(event, 'entries')}
+        onPointerCancel={finishColumnResize}
+        onPointerDown={(event) => beginColumnResize(event, 'entries')}
+        onPointerMove={continueColumnResize}
+        onPointerUp={finishColumnResize}
+        role="separator"
+        tabIndex={0}
+        title="Resize Keys and detail. Use arrow keys or drag; double-click to reset."
+      />
       <section className="entry-detail" aria-label="Selected entry">
-        {choosingType ? <div className="entry-type-picker"><div className="entry-editor-heading"><div><p className="eyebrow">New entry</p><h2>Choose a type</h2></div></div><p className="type-picker-copy">The type controls which fields appear in the entry.</p><div className="entry-type-grid">{entryTypeDefinitions.map((type) => <button key={type.id} onClick={() => chooseType(type.id)} type="button"><span className="entry-glyph"><EntryTypeIcon type={type.id} /></span><span><strong>{type.label}</strong><small>{type.description}</small></span></button>)}</div><button className="text-button" onClick={resetEntryEditor} type="button">Cancel</button></div> : draft && definition ? <form autoComplete="off" className="entry-editor" onSubmit={saveEntry}>
+        {selectionMode ? <div className="bulk-selection-summary"><span className="entry-glyph entry-glyph-large"><ListChecks aria-hidden="true" size={21} /></span><div><p className="eyebrow">Bulk selection</p><h2>{selectedVisibleEntryIds.size ? `${selectedVisibleEntryIds.size} selected` : 'Choose entries'}</h2><p>Select entries from this folder, then use the trash icon to delete them permanently.</p></div></div> : choosingType ? <div className="entry-type-picker"><div className="entry-editor-heading"><div><p className="eyebrow">New entry</p><h2>Choose a type</h2></div></div><p className="type-picker-copy">The type controls which fields appear in the entry.</p><div className="entry-type-grid">{entryTypeDefinitions.map((type) => <button key={type.id} onClick={() => chooseType(type.id)} type="button"><span className="entry-glyph"><EntryTypeIcon type={type.id} /></span><span><strong>{type.label}</strong><small>{type.description}</small></span></button>)}</div><button className="text-button" onClick={resetEntryEditor} type="button">Cancel</button></div> : draft && definition ? <form autoComplete="off" className="entry-editor" onSubmit={saveEntry}>
           <div className="entry-editor-heading"><div><p className="eyebrow">{draft.id ? `Edit ${definition.label}` : `New ${definition.label}`}</p><h2>{draft.id ? draft.title || `Untitled ${definition.label}` : `Add ${definition.label}`}</h2></div>{!draft.id && <button className="text-button" onClick={() => { setDraft(null); setChoosingType(true) }} type="button">Change type</button>}</div>
           <label className="field"><span>Name</span><input autoFocus autoComplete="off" disabled={isSaving} onChange={(event) => setDraft({ ...draft, title: event.target.value })} required value={draft.title} /></label>
           <label className="field"><span>Folder</span><select disabled={isSaving} onChange={(event) => setDraft({ ...draft, groupId: event.target.value })} value={draft.groupId}><option value={vault.rootGroupId}>No folder</option>{vault.groups.filter((group) => !group.isRecycleBin).map((group) => <option key={group.id} value={group.id}>{group.path}</option>)}</select></label>
@@ -522,13 +813,18 @@ export function VaultBrowser({ vault, canEdit, onDeleteEntry, onDeleteGroup, onL
           const isCurrent = copyState?.entryId === selectedEntry.id && copyState.fieldKey === field.key
           const isCopying = isCurrent && copyState.status === 'copying'
           const isCopied = isCurrent && copyState.status === 'copied'
-          return <div className="protected-detail-row" key={field.key}><dt>{field.label}</dt><dd><span aria-label={`${field.label} hidden`} className="masked-secret">••••••••••••</span><button aria-label={`Copy ${field.label.toLowerCase()}`} aria-busy={isCopying || undefined} className={`protected-copy-button ${isCopied ? 'is-copied' : ''}`} disabled={isCopying} onClick={() => void copyProtectedField(selectedEntry, field)} title={isCopied ? `${field.label} copied` : `Copy ${field.label.toLowerCase()}`} type="button">{isCopying ? <LoaderCircle aria-hidden="true" className="is-spinning" size={17} /> : isCopied ? <Check aria-hidden="true" size={17} /> : <Copy aria-hidden="true" size={17} />}</button></dd></div>
-        })}</dl>{copyState?.entryId === selectedEntry.id && <p aria-live="polite" className={`copy-status ${copyState.status === 'error' ? 'is-error' : ''}`} role={copyState.status === 'error' ? 'alert' : 'status'}>{copyState.message}</p>}{saveError && <p className="unlock-error" role="alert">{saveError}</p>}{moveError && <p className="unlock-error" role="alert">{moveError}</p>}{!selectedEntry.isDeleted && canEdit && <div aria-label="Entry actions" className="entry-detail-actions" role="group"><button aria-label={`Edit ${selectedEntry.title}`} aria-busy={isLoadingEntry || undefined} className="button button-secondary button-icon" disabled={isLoadingEntry || isMovingEntry} onClick={() => void beginEdit(selectedEntry)} title={`Edit ${selectedEntry.title}`} type="button">{isLoadingEntry ? <LoaderCircle aria-hidden="true" className="is-spinning" /> : <Pencil aria-hidden="true" />}</button><button aria-label={`Move ${selectedEntry.title}`} className="button button-secondary button-icon" disabled={isMovingEntry || (selectedEntry.groupId === vault.rootGroupId && vault.groups.every((group) => group.isRecycleBin))} onClick={() => { setMoveError(''); setEntryToMove(selectedEntry) }} title={`Move ${selectedEntry.title}`} type="button"><FolderInput aria-hidden="true" /></button><button aria-label={`Delete ${selectedEntry.title}`} className="button button-icon button-icon-danger" disabled={isMovingEntry} onClick={() => { setDeleteError(''); setEntryToDelete(selectedEntry) }} title={`Delete ${selectedEntry.title}`} type="button"><Trash2 aria-hidden="true" /></button></div>}<p className="read-only-note">Protected values stay masked and are decrypted one at a time only when you copy or edit them.</p></> : <p className="vault-empty-state">Choose an entry or add a new one.</p>}
+          const isRevealCurrent = revealState?.entryId === selectedEntry.id && revealState.fieldKey === field.key
+          const isRevealing = isRevealCurrent && revealState.status === 'loading'
+          const isRevealed = isRevealCurrent && revealState.status === 'revealed'
+          return <div className="protected-detail-row" key={field.key}><dt>{field.label}</dt><dd><span aria-label={isRevealed ? `${field.label} revealed` : `${field.label} hidden`} className={isRevealed ? 'revealed-secret' : 'masked-secret'}>{isRevealed ? revealState.value : '••••••••••••'}</span><span className="protected-field-actions"><button aria-label={`${isRevealed ? 'Hide' : 'Reveal'} ${field.label.toLowerCase()}`} aria-busy={isRevealing || undefined} aria-pressed={isRevealed} className="protected-field-button" disabled={isRevealing} onClick={() => void toggleProtectedFieldReveal(selectedEntry, field)} title={`${isRevealed ? 'Hide' : 'Reveal'} ${field.label.toLowerCase()}`} type="button">{isRevealing ? <LoaderCircle aria-hidden="true" className="is-spinning" size={17} /> : isRevealed ? <EyeOff aria-hidden="true" size={17} /> : <Eye aria-hidden="true" size={17} />}</button><button aria-label={`Copy ${field.label.toLowerCase()}`} aria-busy={isCopying || undefined} className={`protected-field-button ${isCopied ? 'is-copied' : ''}`} disabled={isCopying} onClick={() => void copyProtectedField(selectedEntry, field)} title={isCopied ? `${field.label} copied` : `Copy ${field.label.toLowerCase()}`} type="button">{isCopying ? <LoaderCircle aria-hidden="true" className="is-spinning" size={17} /> : isCopied ? <Check aria-hidden="true" size={17} /> : <Copy aria-hidden="true" size={17} />}</button></span></dd></div>
+        })}</dl>{copyState?.entryId === selectedEntry.id && <p aria-live="polite" className={`copy-status ${copyState.status === 'error' ? 'is-error' : ''}`} role={copyState.status === 'error' ? 'alert' : 'status'}>{copyState.message}</p>}{revealState?.entryId === selectedEntry.id && <p aria-live="polite" className={`copy-status ${revealState.status === 'error' ? 'is-error' : ''}`} role={revealState.status === 'error' ? 'alert' : 'status'}>{revealState.message}</p>}{saveError && <p className="unlock-error" role="alert">{saveError}</p>}{moveError && <p className="unlock-error" role="alert">{moveError}</p>}{!selectedEntry.isDeleted && canEdit && <div aria-label="Entry actions" className="entry-detail-actions" role="group"><button aria-label={`Edit ${selectedEntry.title}`} aria-busy={isLoadingEntry || undefined} className="button button-secondary button-icon" disabled={isLoadingEntry || isMovingEntry} onClick={() => void beginEdit(selectedEntry)} title={`Edit ${selectedEntry.title}`} type="button">{isLoadingEntry ? <LoaderCircle aria-hidden="true" className="is-spinning" /> : <Pencil aria-hidden="true" />}</button><button aria-label={`Move ${selectedEntry.title}`} className="button button-secondary button-icon" disabled={isMovingEntry || (selectedEntry.groupId === vault.rootGroupId && vault.groups.every((group) => group.isRecycleBin))} onClick={() => { setMoveError(''); setEntryToMove(selectedEntry) }} title={`Move ${selectedEntry.title}`} type="button"><FolderInput aria-hidden="true" /></button><button aria-label={`Delete ${selectedEntry.title}`} className="button button-icon button-icon-danger" disabled={isMovingEntry} onClick={() => { setDeleteError(''); setEntryToDelete(selectedEntry) }} title={`Delete ${selectedEntry.title}`} type="button"><Trash2 aria-hidden="true" /></button></div>}<p className="read-only-note">Protected values stay masked and are decrypted one at a time only when you copy, reveal, or edit them.</p></> : <p className="vault-empty-state">Choose an entry or add a new one.</p>}
       </section>
     </div>
     {entryToDelete && <DeleteEntryDialog entry={entryToDelete} error={deleteError} isDeleting={isDeleting} onCancel={() => { if (!isDeleting) { setDeleteError(''); setEntryToDelete(null) } }} onDelete={() => void deleteEntry()} />}
+    {entriesToDeleteForever.length > 0 && <DeleteEntriesForeverDialog entries={entriesToDeleteForever} error={deleteError} isDeleting={isDeleting} onCancel={() => { if (!isDeleting) { setDeleteError(''); setEntriesToDeleteForever([]) } }} onDelete={() => void deleteEntriesForever()} />}
     {entryToMove && <MoveEntryDialog entry={entryToMove} error={moveError} isMoving={isMovingEntry} onCancel={() => { if (!isMovingEntry) { setMoveError(''); setEntryToMove(null) } }} onMove={(groupId) => void moveEntry(entryToMove.id, groupId)} vault={vault} />}
     {groupDialog && <GroupNameDialog error={groupError} group={groupDialog === 'new' ? null : groupDialog} isSaving={isSavingGroup} onCancel={() => { if (!isSavingGroup) { setGroupError(''); setGroupDialog(null) } }} onSave={(group) => void saveGroup(group)} rootGroupId={vault.rootGroupId} />}
     {groupToDelete && <DeleteGroupDialog error={groupError} group={groupToDelete} isDeleting={isSavingGroup} onCancel={() => { if (!isSavingGroup) { setGroupError(''); setGroupToDelete(null) } }} onDelete={() => void deleteGroup()} />}
+    {renameDialogOpen && <RenameVaultDialog currentName={vault.databaseName} error={renameError} isSaving={isRenaming} onCancel={() => { if (!isRenaming) { setRenameError(''); setRenameDialogOpen(false) } }} onSave={(name) => void renameVault(name)} />}
   </div>
 }

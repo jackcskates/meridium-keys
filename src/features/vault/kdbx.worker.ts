@@ -2,7 +2,7 @@
 
 import { DOMParser as XmlDomParser, XMLSerializer as XmlSerializer } from '@xmldom/xmldom'
 import type { Kdbx } from 'kdbxweb'
-import { createKdbxData, loadKdbxDatabase, mapKdbxSnapshot, prepareKdbxEntryDelete, prepareKdbxEntryMove, prepareKdbxEntrySave, prepareKdbxGroupDelete, prepareKdbxGroupSave, readKdbxEntryDetails, readKdbxProtectedField, VaultOpenError } from './kdbx'
+import { createKdbxData, loadKdbxDatabase, mapKdbxSnapshot, prepareKdbxEntriesPermanentDelete, prepareKdbxEntryDelete, prepareKdbxEntryMove, prepareKdbxEntrySave, prepareKdbxGroupDelete, prepareKdbxGroupSave, prepareKdbxVaultRename, readKdbxEntryDetails, readKdbxProtectedField, VaultOpenError } from './kdbx'
 import type { VaultWorkerRequest, VaultWorkerResponse } from './types'
 
 const scope = self as DedicatedWorkerGlobalScope
@@ -18,7 +18,7 @@ scopeWithXml.XMLSerializer = XmlSerializer as unknown as typeof XMLSerializer
 
 let database: Kdbx | null = null
 let fileName = ''
-let pendingChange: { id: string; database: Kdbx } | null = null
+let pendingChange: { id: string; database: Kdbx; fileName?: string } | null = null
 
 function respond(message: VaultWorkerResponse) {
   scope.postMessage(message)
@@ -90,6 +90,21 @@ scope.onmessage = async (event: MessageEvent<VaultWorkerRequest>) => {
       return
     }
 
+    if (event.data.type === 'prepare-entries-permanent-delete') {
+      if (pendingChange) throw new VaultOpenError('WORKER_FAILURE', 'Finish the current save before deleting more entries.')
+      const prepared = await prepareKdbxEntriesPermanentDelete(database, event.data.entryIds, fileName)
+      const changeId = crypto.randomUUID()
+      pendingChange = { id: changeId, database: prepared.database }
+      scope.postMessage({
+        type: 'change-prepared',
+        changeId,
+        data: prepared.data,
+        requestId: event.data.requestId,
+        vault: prepared.vault,
+      } satisfies VaultWorkerResponse, [prepared.data])
+      return
+    }
+
     if (event.data.type === 'prepare-entry-move') {
       if (pendingChange) throw new VaultOpenError('WORKER_FAILURE', 'Finish the current save before moving another entry.')
       const prepared = await prepareKdbxEntryMove(database, event.data.entryId, event.data.groupId, fileName)
@@ -137,10 +152,28 @@ scope.onmessage = async (event: MessageEvent<VaultWorkerRequest>) => {
       return
     }
 
+    if (event.data.type === 'prepare-vault-rename') {
+      if (pendingChange) throw new VaultOpenError('WORKER_FAILURE', 'Finish the current save before renaming this vault.')
+      const prepared = await prepareKdbxVaultRename(database, event.data.databaseName, event.data.fileName)
+      const changeId = crypto.randomUUID()
+      pendingChange = { id: changeId, database: prepared.database, fileName: event.data.fileName }
+      scope.postMessage({
+        type: 'change-prepared',
+        changeId,
+        data: prepared.data,
+        requestId: event.data.requestId,
+        vault: prepared.vault,
+      } satisfies VaultWorkerResponse, [prepared.data])
+      return
+    }
+
     if (!pendingChange || pendingChange.id !== event.data.changeId) {
       throw new VaultOpenError('WORKER_FAILURE', 'The prepared vault change is no longer available.')
     }
-    if (event.data.commit) database = pendingChange.database
+    if (event.data.commit) {
+      database = pendingChange.database
+      if (pendingChange.fileName) fileName = pendingChange.fileName
+    }
     pendingChange = null
     respond({ type: 'change-finished', requestId: event.data.requestId, vault: mapKdbxSnapshot(database, fileName) })
   } catch (error) {
