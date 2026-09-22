@@ -397,6 +397,17 @@ they never existed; mark them superseded and link to the replacement.
   another format is more accurate. Retagging should be efficient and must not
   silently destroy usernames, secrets, URLs, notes, or custom KDBX fields.
 
+### D-045 - Compact folder-scoped key filtering
+
+- **Status:** Accepted
+- **Decision:** Place a small keyword filter directly beneath the Keys heading.
+  Filter only the current folder's already-decrypted entry summaries by name,
+  visible subtitle, or type label; clear the query when navigating folders and
+  never persist a plaintext search index.
+- **Reason:** Gardening a populated vault needs fast narrowing without turning
+  the utility column into a large search surface or decrypting additional
+  protected fields.
+
 ## Open
 
 ### D-005 - Standard KDBX compatibility

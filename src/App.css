@@ -1276,6 +1276,53 @@ h1 {
   border-bottom: 1px solid var(--border-subtle);
 }
 
+.entry-search {
+  min-height: 30px;
+  margin: 0 3px 7px;
+  padding: 0 7px 0 9px;
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+  color: var(--text-tertiary);
+  background: var(--surface-2);
+  border: 1px solid transparent;
+  border-radius: 9px;
+}
+
+.entry-search.has-value { grid-template-columns: 14px minmax(0, 1fr) 24px; }
+.entry-search:focus-within { color: var(--text-secondary); border-color: var(--border-default); }
+
+.entry-search input {
+  min-width: 0;
+  padding: 5px 0;
+  color: var(--text-primary);
+  background: transparent;
+  border: 0;
+  outline: 0;
+  font: inherit;
+  font-size: 0.72rem;
+}
+
+.entry-search input::placeholder { color: var(--text-tertiary); }
+.entry-search input::-webkit-search-cancel-button { display: none; }
+
+.entry-search button {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  color: var(--text-tertiary);
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.entry-search button:hover,
+.entry-search button:focus-visible { color: var(--text-primary); background: var(--surface-3); }
+
 .panel-action {
   width: 32px;
   height: 32px;

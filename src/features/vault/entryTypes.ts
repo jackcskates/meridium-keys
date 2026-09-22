@@ -1,4 +1,4 @@
-import type { VaultEntryDraft, VaultEntryType } from './types'
+import type { VaultEntryDraft, VaultEntrySummary, VaultEntryType } from './types'
 
 export type EntryFieldKind = 'text' | 'email' | 'url' | 'secret' | 'textarea' | 'secret-textarea' | 'date'
 
@@ -172,6 +172,13 @@ export function entryTypeConflicts(draft: VaultEntryDraft, type: VaultEntryType)
 export function missingRequiredEntryFields(draft: VaultEntryDraft) {
   return getEntryTypeDefinition(draft.type).fields
     .filter((field) => field.required && !draft.fields[field.key]?.trim())
+}
+
+export function entryMatchesKeyword(entry: Pick<VaultEntrySummary, 'title' | 'subtitle' | 'type'>, keyword: string) {
+  const normalizedKeyword = keyword.trim().toLocaleLowerCase()
+  if (!normalizedKeyword) return true
+  return [entry.title, entry.subtitle, entryTypeLabel(entry.type)]
+    .some((value) => value.toLocaleLowerCase().includes(normalizedKeyword))
 }
 
 export function entryTypeLabel(type: VaultEntryType) {

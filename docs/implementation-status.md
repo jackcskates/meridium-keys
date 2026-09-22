@@ -98,6 +98,9 @@ Last verified: 2026-09-22.
   fields remain readable in compatible KeePass applications. Lucide type icons
   precede entry titles in the folder navigator, entry list, type picker, and
   selected-entry header.
+- A compact filter at the top of the Keys list matches the current folder's
+  entry names, visible subtitles, and type labels entirely in memory. It clears
+  on folder navigation and does not persist a plaintext search index.
 - Click the selected entry’s type icon to convert it, or bulk-convert selected
   entries to any other supported type. Individual conversion resolves each
   source-only field as Preserve or Remove and collects missing required fields

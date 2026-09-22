@@ -70,11 +70,14 @@ future possibilities.
 - Browse folders and entries in the currently unlocked vault.
 - Inspect safe type, folder, subtitle, and protected-field presence metadata.
 - Choose an entry type first, then create or edit the fields for that type.
-- Keyword search is the next slice and is not implemented yet.
+- Compact, in-memory keyword filtering within the currently selected folder by
+  entry name, visible subtitle, or type label. The filter clears when changing
+  folders and never creates a persistent plaintext index.
 
 **Proposed:**
 
 - Search names, usernames, URLs, tags, notes, and safe type metadata in memory.
+- Expand the current-folder filter into vault-wide search and result navigation.
 - Never build a persistent plaintext search index.
 - Provide keyboard-first search and result navigation on desktop.
 - Keep the active vault obvious while searching.

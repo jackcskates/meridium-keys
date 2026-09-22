@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
-import { Check, CheckSquare, Copy, Ellipsis, Eye, EyeOff, FolderInput, ListChecks, LoaderCircle, LockKeyhole, Pencil, Plus, Square, Tags, Trash2, X } from 'lucide-react'
+import { Check, CheckSquare, Copy, Ellipsis, Eye, EyeOff, FolderInput, ListChecks, LoaderCircle, LockKeyhole, Pencil, Plus, Search, Square, Tags, Trash2, X } from 'lucide-react'
 import { clampVaultColumnWidths, columnResizeHandleWidth, detailColumnMinWidth, entryColumnMinWidth, folderColumnMinWidth, type ColumnWidths } from './columnSizing'
 import { copyProtectedText } from './copyProtectedText'
 import { EntryTypeIcon } from './EntryTypeIcon'
-import { changeEntryDraftType, createEmptyEntryDraft, entryTypeConflicts, entryTypeDefinitions, entryTypeLabel, getEntryTypeDefinition, missingRequiredEntryFields, type EntryFieldDefinition } from './entryTypes'
+import { changeEntryDraftType, createEmptyEntryDraft, entryMatchesKeyword, entryTypeConflicts, entryTypeDefinitions, entryTypeLabel, getEntryTypeDefinition, missingRequiredEntryFields, type EntryFieldDefinition } from './entryTypes'
 import { generateServicePassword, generatedPasswordLength } from './passwordGenerator'
 import type { VaultEntryDetails, VaultEntryDraft, VaultEntrySummary, VaultEntryType, VaultGroupDraft, VaultGroupSummary, VaultSnapshot } from './types'
 
@@ -256,11 +256,15 @@ export function VaultBrowser({ vault, canEdit, onChangeEntriesType, onDeleteEntr
   const [selectedGroupId, setSelectedGroupId] = useState(vault.rootGroupId)
   const selectedGroup = vault.groups.find((group) => group.id === selectedGroupId)
   const selectedGroupIsRecycleRoot = selectedGroup?.isRecycleBin && selectedGroup.parentGroupId === vault.rootGroupId
-  const visibleEntries = useMemo(() => {
+  const groupEntries = useMemo(() => {
     if (selectedGroupId === vault.rootGroupId) return unfiledEntries
     if (selectedGroup?.isRecycleBin) return selectedGroupIsRecycleRoot ? vault.entries.filter((entry) => entry.isDeleted) : vault.entries.filter((entry) => entry.groupId === selectedGroupId)
     return activeEntries.filter((entry) => entry.groupId === selectedGroupId)
   }, [activeEntries, selectedGroup, selectedGroupId, selectedGroupIsRecycleRoot, unfiledEntries, vault.entries, vault.rootGroupId])
+  const [entrySearch, setEntrySearch] = useState('')
+  const visibleEntries = useMemo(() => {
+    return groupEntries.filter((entry) => entryMatchesKeyword(entry, entrySearch))
+  }, [entrySearch, groupEntries])
   const [selectedEntryId, setSelectedEntryId] = useState(unfiledEntries[0]?.id ?? '')
   const selectedEntry = visibleEntries.find((entry) => entry.id === selectedEntryId) ?? visibleEntries[0]
   const [choosingType, setChoosingType] = useState(false)
@@ -444,6 +448,7 @@ export function VaultBrowser({ vault, canEdit, onChangeEntriesType, onDeleteEntr
 
   function selectGroup(groupId: string) {
     setOpenGroupMenuId('')
+    setEntrySearch('')
     setSelectedGroupId(groupId)
     const group = vault.groups.find((candidate) => candidate.id === groupId)
     const isRecycleRoot = group?.isRecycleBin && group.parentGroupId === vault.rootGroupId
@@ -455,6 +460,7 @@ export function VaultBrowser({ vault, canEdit, onChangeEntriesType, onDeleteEntr
   }
 
   function selectUnfiledEntry(entryId: string) {
+    setEntrySearch('')
     setSelectedGroupId(vault.rootGroupId)
     setSelectedEntryId(entryId)
     resetEntryEditor()
@@ -887,6 +893,7 @@ export function VaultBrowser({ vault, canEdit, onChangeEntriesType, onDeleteEntr
               <button aria-label="Stop selecting entries" className="panel-action" disabled={isDeleting} onClick={stopSelecting} title="Done selecting" type="button"><X aria-hidden="true" size={18} /></button>
           </> : <>{canEdit && visibleEntries.length > 0 && <button aria-label="Select multiple entries" className="panel-action" onClick={() => { setSelectionMode(true); setSelectedEntryIds(new Set()) }} title="Select multiple entries" type="button"><ListChecks aria-hidden="true" size={17} /></button>}{canEdit && <button aria-label="Add entry" className="panel-action" disabled={isSaving || isDeleting} onClick={beginCreate} title="Add entry" type="button"><Plus aria-hidden="true" size={17} /></button>}</>}
         </span></div>
+        {groupEntries.length > 0 && <label className={`entry-search ${entrySearch ? 'has-value' : ''}`}><Search aria-hidden="true" size={14} /><span className="visually-hidden">Filter keys</span><input aria-label="Filter keys" autoComplete="off" enterKeyHint="search" onChange={(event) => setEntrySearch(event.target.value)} placeholder="Filter keys" spellCheck={false} type="search" value={entrySearch} />{entrySearch && <button aria-label="Clear key filter" onClick={() => setEntrySearch('')} title="Clear filter" type="button"><X aria-hidden="true" size={13} /></button>}</label>}
         {visibleEntries.map((entry) => <div
           className={`entry-row ${!selectionMode && selectedEntryId === entry.id ? 'is-selected' : ''} ${selectionMode && selectedVisibleEntryIds.has(entry.id) ? 'is-bulk-selected' : ''} ${draggedEntryId === entry.id ? 'is-dragging' : ''} ${selectionMode ? 'is-selecting' : ''}`}
           key={entry.id}
