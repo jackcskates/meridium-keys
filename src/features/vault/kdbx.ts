@@ -25,6 +25,7 @@ import type {
   VaultTransferEntry,
 } from './types'
 import { allTypedFieldDefinitions, entryTypeMetadataKey, entryTypeLabel, getEntryTypeDefinition, isVaultEntryType } from './entryTypes'
+import { vaultPasswordReady } from './passwordPolicy'
 
 const currentArgon2Version = 0x13
 let argon2Configured = false
@@ -621,6 +622,36 @@ export async function prepareKdbxVaultRename(database: Kdbx, databaseName: strin
     const clonedData = await database.save()
     const workingDatabase = await Kdbx.load(clonedData, database.credentials)
     workingDatabase.meta.name = name
+    const data = await workingDatabase.save()
+    return {
+      database: workingDatabase,
+      data,
+      vault: mapKdbxSnapshot(workingDatabase, fileName),
+    }
+  } catch (error) {
+    throw mapKdbxError(error)
+  }
+}
+
+export async function prepareKdbxVaultPasswordChange(database: Kdbx, currentPassword: string, newPassword: string, fileName: string) {
+  if (!currentPassword) throw new VaultOpenError('EMPTY_PASSWORD', 'Enter the current master password for this vault.')
+  if (!vaultPasswordReady(newPassword, database.meta.name || fileName.replace(/\.kdbx$/i, ''), newPassword)) {
+    throw new VaultOpenError('WORKER_FAILURE', 'The new master password does not meet the vault password requirements.')
+  }
+  if (currentPassword === newPassword) throw new VaultOpenError('WORKER_FAILURE', 'Choose a new master password that differs from the current password.')
+
+  try {
+    const clonedData = await database.save()
+    let workingDatabase: Kdbx
+    try {
+      workingDatabase = await loadKdbxDatabase(clonedData, currentPassword)
+    } catch (error) {
+      if (error instanceof VaultOpenError && error.code === 'INVALID_CREDENTIALS') {
+        throw new VaultOpenError('INVALID_CREDENTIALS', 'The current master password is incorrect.')
+      }
+      throw error
+    }
+    await workingDatabase.credentials.setPassword(ProtectedValue.fromString(newPassword))
     const data = await workingDatabase.save()
     return {
       database: workingDatabase,

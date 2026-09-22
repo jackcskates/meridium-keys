@@ -41,6 +41,9 @@ future possibilities.
   destination first and recycle the source entries only after that succeeds.
 - Rename an unlocked Dropbox vault by updating both its internal KDBX database
   name and its encrypted Dropbox filename without allowing a conflicting copy.
+- Change an unlocked Dropbox vault's master password after verifying its current
+  password. Re-encrypt the complete standard KDBX locally and replace only the
+  expected Dropbox revision; never persist or transmit either password.
 - Drag entries between real folders or “No folder” with mouse or touch, with a
   keyboard-accessible Move entry dialog for the same operation. The Recycle Bin
   is not a valid drop destination.

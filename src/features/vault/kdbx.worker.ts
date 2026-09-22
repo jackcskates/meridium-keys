@@ -2,7 +2,7 @@
 
 import { DOMParser as XmlDomParser, XMLSerializer as XmlSerializer } from '@xmldom/xmldom'
 import type { Kdbx } from 'kdbxweb'
-import { createKdbxData, exportKdbxEntriesTransfer, exportKdbxEntryTransfer, loadKdbxDatabase, mapKdbxSnapshot, prepareKdbxEntriesDelete, prepareKdbxEntriesImport, prepareKdbxEntriesMove, prepareKdbxEntriesPermanentDelete, prepareKdbxEntriesTypeChange, prepareKdbxEntryDelete, prepareKdbxEntryImport, prepareKdbxEntryMove, prepareKdbxEntrySave, prepareKdbxGroupDelete, prepareKdbxGroupSave, prepareKdbxVaultRename, readKdbxEntryDetails, readKdbxProtectedField, VaultOpenError } from './kdbx'
+import { createKdbxData, exportKdbxEntriesTransfer, exportKdbxEntryTransfer, loadKdbxDatabase, mapKdbxSnapshot, prepareKdbxEntriesDelete, prepareKdbxEntriesImport, prepareKdbxEntriesMove, prepareKdbxEntriesPermanentDelete, prepareKdbxEntriesTypeChange, prepareKdbxEntryDelete, prepareKdbxEntryImport, prepareKdbxEntryMove, prepareKdbxEntrySave, prepareKdbxGroupDelete, prepareKdbxGroupSave, prepareKdbxVaultPasswordChange, prepareKdbxVaultRename, readKdbxEntryDetails, readKdbxProtectedField, VaultOpenError } from './kdbx'
 import type { VaultWorkerRequest, VaultWorkerResponse } from './types'
 
 const scope = self as DedicatedWorkerGlobalScope
@@ -228,6 +228,21 @@ scope.onmessage = async (event: MessageEvent<VaultWorkerRequest>) => {
       const prepared = await prepareKdbxVaultRename(database, event.data.databaseName, event.data.fileName)
       const changeId = crypto.randomUUID()
       pendingChange = { id: changeId, database: prepared.database, fileName: event.data.fileName }
+      scope.postMessage({
+        type: 'change-prepared',
+        changeId,
+        data: prepared.data,
+        requestId: event.data.requestId,
+        vault: prepared.vault,
+      } satisfies VaultWorkerResponse, [prepared.data])
+      return
+    }
+
+    if (event.data.type === 'prepare-vault-password-change') {
+      if (pendingChange) throw new VaultOpenError('WORKER_FAILURE', 'Finish the current save before changing this vault password.')
+      const prepared = await prepareKdbxVaultPasswordChange(database, event.data.currentPassword, event.data.newPassword, fileName)
+      const changeId = crypto.randomUUID()
+      pendingChange = { id: changeId, database: prepared.database }
       scope.postMessage({
         type: 'change-prepared',
         changeId,

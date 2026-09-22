@@ -431,6 +431,19 @@ they never existed; mark them superseded and link to the replacement.
   without normalizing the product around permanently open decrypted vaults or
   risking source loss during a two-file operation.
 
+### D-047 - Revision-safe vault master-password changes
+
+- **Status:** Accepted
+- **Decision:** Let an unlocked Dropbox vault change its independent KDBX master
+  password only after the worker verifies the current password. Apply the vault
+  creation password policy to the new password, re-encrypt a cloned standard
+  KDBX locally, upload it over the expected Dropbox revision, and adopt the new
+  in-memory credentials only after Dropbox confirms the save. Never persist,
+  log, or transmit either password.
+- **Reason:** A master-password rotation must protect the complete portable KDBX
+  without creating a second vault, losing entry data, or leaving the open worker
+  on credentials that do not match the remote encrypted revision.
+
 ## Open
 
 ### D-005 - Standard KDBX compatibility

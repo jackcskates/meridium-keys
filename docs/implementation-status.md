@@ -123,6 +123,11 @@ Last verified: 2026-09-22.
 - Rename an unlocked Dropbox vault from the working surface. Rename updates the
   standard KDBX database name and the encrypted Dropbox filename, rejects a
   conflicting filename, and never decrypts or transmits entry fields.
+- Change an unlocked Dropbox vault's master password from the compact vault
+  utilities. The worker verifies the current password against a cloned KDBX,
+  applies the same password guidance used at creation, re-encrypts every entry
+  with the new credential, and commits it only after the revision-safe Dropbox
+  save succeeds.
 - Move entries between real KDBX folders or back to “No folder” by dragging the
   dedicated handle with a mouse or touch pointer. A Move entry dialog provides
   the equivalent keyboard-accessible action. Recycle Bin is never a move target.
@@ -164,6 +169,9 @@ Last verified: 2026-09-22.
 ## Compatibility evidence
 
 - Automated fixtures cover KDBX 4 with Argon2id and AES-KDF.
+- Automated password-rotation coverage rejects an incorrect current password,
+  preserves the encrypted vault contents, opens the result with the new master
+  password, and rejects the former password.
 - Wrong-password, malformed-file, empty-password, protected-value
   non-disclosure, one-field protected reads, and clipboard-path tests pass.
 - A newly generated KDBX 4 vault is reopened with its chosen master password and rejected with a wrong password in automated compatibility tests.

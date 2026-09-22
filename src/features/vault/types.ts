@@ -123,6 +123,7 @@ export type VaultWorkerRequest =
   | { type: 'prepare-group-save'; group: VaultGroupDraft; requestId: string }
   | { type: 'prepare-group-delete'; groupId: string; requestId: string }
   | { type: 'prepare-vault-rename'; databaseName: string; fileName: string; requestId: string }
+  | { type: 'prepare-vault-password-change'; currentPassword: string; newPassword: string; requestId: string }
   | { type: 'finish-change'; changeId: string; commit: boolean; requestId: string }
 
 export type VaultWorkerResponse =

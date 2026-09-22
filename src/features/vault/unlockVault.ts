@@ -157,6 +157,12 @@ export class UnlockedVaultSession {
     return { changeId: message.changeId, data: message.data, vault: message.vault }
   }
 
+  async prepareVaultPasswordChange(currentPassword: string, newPassword: string): Promise<PreparedVaultChange> {
+    const message = await this.request((requestId) => ({ type: 'prepare-vault-password-change', currentPassword, newPassword, requestId }))
+    if (message.type !== 'change-prepared') throw new VaultOpenError('WORKER_FAILURE', 'The secure vault worker returned an unexpected password-change response.')
+    return { changeId: message.changeId, data: message.data, vault: message.vault }
+  }
+
   async finishChange(changeId: string, commit: boolean) {
     const message = await this.request((requestId) => ({ type: 'finish-change', changeId, commit, requestId }))
     if (message.type !== 'change-finished') throw new VaultOpenError('WORKER_FAILURE', 'The secure vault worker could not finish the save.')

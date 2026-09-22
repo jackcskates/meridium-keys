@@ -770,6 +770,12 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
     return persistPreparedVaultChange(await session.prepareEntriesTypeChange(entryIds, entryType))
   }
 
+  async function changeOpenVaultPassword(currentPassword: string, newPassword: string) {
+    const session = vaultSessionRef.current
+    if (!session) throw new Error('The vault is locked. Open it again before changing its password.')
+    return persistPreparedVaultChange(await session.prepareVaultPasswordChange(currentPassword, newPassword))
+  }
+
   async function renameOpenVault(name: string) {
     const session = vaultSessionRef.current
     const remoteVault = activeDropboxVault
@@ -1183,6 +1189,7 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
           {activeView === 'browse' && vaultSnapshot && (
             <VaultBrowser
               canEdit={selectedStorage === 'dropbox' && Boolean(activeDropboxVault)}
+              onChangeVaultPassword={changeOpenVaultPassword}
               onEntryDragEnd={clearVaultEntryDrag}
               onEntryDragStart={(entry) => { if (activeDropboxVaultId) setDraggedVaultEntry({ ...entry, sourceVaultId: activeDropboxVaultId }) }}
               onChangeEntriesType={changeVaultEntriesType}

@@ -1,16 +1,18 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
-import { Check, CheckSquare, Copy, Ellipsis, Eye, EyeOff, FolderInput, ListChecks, LoaderCircle, LockKeyhole, Pencil, Plus, Search, Square, Tags, Trash2, X } from 'lucide-react'
+import { Check, CheckSquare, Copy, Ellipsis, Eye, EyeOff, FolderInput, KeyRound, ListChecks, LoaderCircle, LockKeyhole, Pencil, Plus, Search, Square, Tags, Trash2, X } from 'lucide-react'
 import { clampVaultColumnWidths, columnResizeHandleWidth, detailColumnMinWidth, entryColumnMinWidth, folderColumnMinWidth, type ColumnWidths } from './columnSizing'
 import { copyProtectedText } from './copyProtectedText'
 import { EntryTypeIcon } from './EntryTypeIcon'
 import { changeEntryDraftType, createEmptyEntryDraft, entryMatchesKeyword, entryTypeConflicts, entryTypeDefinitions, entryTypeLabel, getEntryTypeDefinition, missingRequiredEntryFields, type EntryFieldDefinition } from './entryTypes'
 import { generateServicePassword, generatedPasswordLength } from './passwordGenerator'
+import { vaultPasswordRequirements } from './passwordPolicy'
 import type { OpenVaultMoveTarget, VaultEntryDetails, VaultEntryDraft, VaultEntrySummary, VaultEntryType, VaultGroupDraft, VaultGroupSummary, VaultMoveDestination, VaultSnapshot } from './types'
 
 type VaultBrowserProps = {
   vault: VaultSnapshot
   vaultId?: string
   canEdit: boolean
+  onChangeVaultPassword: (currentPassword: string, newPassword: string) => Promise<VaultSnapshot>
   onChangeEntriesType: (entryIds: string[], entryType: VaultEntryType) => Promise<VaultSnapshot>
   onDeleteEntry: (entryId: string) => Promise<VaultSnapshot>
   onDeleteEntriesForever: (entryIds: string[]) => Promise<VaultSnapshot>
@@ -188,6 +190,38 @@ function RenameVaultDialog({ currentName, isSaving, error, onCancel, onSave }: {
   </form></DialogShell>
 }
 
+function ChangeVaultPasswordDialog({ vaultName, isSaving, error, onCancel, onSave }: {
+  vaultName: string
+  isSaving: boolean
+  error: string
+  onCancel: () => void
+  onSave: (currentPassword: string, newPassword: string) => void
+}) {
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmation, setConfirmation] = useState('')
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false)
+  const [showNewPassword, setShowNewPassword] = useState(false)
+  const requirements = vaultPasswordRequirements(newPassword, vaultName, confirmation)
+  const passwordReady = requirements.every((requirement) => requirement.met)
+  const passwordChanged = Boolean(newPassword) && newPassword !== currentPassword
+  const canSubmit = Boolean(currentPassword) && passwordReady && passwordChanged
+
+  return <DialogShell describedBy="change-vault-password-description" labelledBy="change-vault-password-title" locked={isSaving} onCancel={onCancel}><form autoComplete="off" className="confirm-dialog-card" onSubmit={(event) => { event.preventDefault(); if (canSubmit) onSave(currentPassword, newPassword) }}>
+    <span className="confirm-dialog-icon is-neutral"><KeyRound aria-hidden="true" size={24} /></span>
+    <div className="confirm-dialog-copy"><p className="eyebrow">Vault security</p><h2 id="change-vault-password-title">Change master password</h2><p id="change-vault-password-description">Keys will verify the current password, re-encrypt the complete KDBX locally, then replace only this vault’s encrypted Dropbox revision.</p></div>
+    <label className="field"><span>Current master password</span><div className="secret-input"><input autoCapitalize="none" autoComplete="off" autoCorrect="off" autoFocus disabled={isSaving} onChange={(event) => setCurrentPassword(event.target.value)} required spellCheck={false} type={showCurrentPassword ? 'text' : 'password'} value={currentPassword} /><button aria-label={showCurrentPassword ? 'Hide current master password' : 'Show current master password'} aria-pressed={showCurrentPassword} disabled={isSaving} onClick={() => setShowCurrentPassword((current) => !current)} type="button">{showCurrentPassword ? <EyeOff aria-hidden="true" size={17} /> : <Eye aria-hidden="true" size={17} />}</button></div></label>
+    <div className="password-creation">
+      <label className="field"><span>New master password</span><div className="secret-input"><input aria-describedby="changed-vault-password-requirements" autoCapitalize="none" autoComplete="off" autoCorrect="off" disabled={isSaving} maxLength={128} minLength={15} onChange={(event) => setNewPassword(event.target.value)} placeholder="A few unrelated words work well" required spellCheck={false} type={showNewPassword ? 'text' : 'password'} value={newPassword} /><button aria-label={showNewPassword ? 'Hide new master password' : 'Show new master password'} aria-pressed={showNewPassword} disabled={isSaving} onClick={() => setShowNewPassword((current) => !current)} type="button">{showNewPassword ? <EyeOff aria-hidden="true" size={17} /> : <Eye aria-hidden="true" size={17} />}</button></div></label>
+      <label className="field"><span>Confirm new master password</span><input autoCapitalize="none" autoComplete="off" autoCorrect="off" disabled={isSaving} maxLength={128} minLength={15} onChange={(event) => setConfirmation(event.target.value)} required spellCheck={false} type={showNewPassword ? 'text' : 'password'} value={confirmation} /></label>
+      <aside className="password-requirements" id="changed-vault-password-requirements"><strong>{passwordReady ? 'Password ready' : 'Your password needs:'}</strong><ul aria-label="New password requirements">{requirements.map((requirement) => <li className={requirement.met ? 'is-met' : ''} data-met={requirement.met} key={requirement.id}><span aria-hidden="true" className="password-rule-icon">{requirement.met && <Check size={13} />}</span><span>{requirement.label}<span className="visually-hidden"> — {requirement.met ? 'met' : 'not yet met'}</span></span></li>)}</ul><p aria-live="polite" role="status">{requirements.filter((requirement) => requirement.met).length} of {requirements.length} requirements met</p></aside>
+    </div>
+    {newPassword && !passwordChanged && <p className="field-error">Choose a password that differs from the current password.</p>}
+    {error && <p className="unlock-error" role="alert">{error}</p>}
+    <div className="confirm-dialog-actions"><button className="button button-secondary" disabled={isSaving} onClick={onCancel} type="button">Cancel</button><button className="button button-primary" disabled={isSaving || !canSubmit} type="submit">{isSaving ? 'Re-encrypting vault…' : 'Change password'}</button></div>
+  </form></DialogShell>
+}
+
 function GroupNameDialog({ group, rootGroupId, isSaving, error, onCancel, onSave }: {
   group: VaultGroupSummary | null
   rootGroupId: string
@@ -290,7 +324,7 @@ function MoveEntriesDialog({ entries, vault, openVaultTargets, isMoving, error, 
   </form></DialogShell>
 }
 
-export function VaultBrowser({ vault, vaultId, canEdit, onChangeEntriesType, onDeleteEntry, onDeleteEntriesForever, onDeleteGroup, onEntryDragEnd, onEntryDragStart, onLoadEntry, onLock, onMoveEntry, onMoveEntries, onDropEntryOnVault, onReadProtectedField, onRenameVault, onSaveEntry, onSaveGroup, onVaultDropTargetChange, openVaultMoveTargets }: VaultBrowserProps) {
+export function VaultBrowser({ vault, vaultId, canEdit, onChangeVaultPassword, onChangeEntriesType, onDeleteEntry, onDeleteEntriesForever, onDeleteGroup, onEntryDragEnd, onEntryDragStart, onLoadEntry, onLock, onMoveEntry, onMoveEntries, onDropEntryOnVault, onReadProtectedField, onRenameVault, onSaveEntry, onSaveGroup, onVaultDropTargetChange, openVaultMoveTargets }: VaultBrowserProps) {
   const activeEntries = useMemo(() => vault.entries.filter((entry) => !entry.isDeleted), [vault.entries])
   const unfiledEntries = useMemo(() => activeEntries.filter((entry) => entry.groupId === vault.rootGroupId), [activeEntries, vault.rootGroupId])
   const activeGroups = useMemo(() => vault.groups.filter((group) => !group.isRecycleBin), [vault.groups])
@@ -335,6 +369,9 @@ export function VaultBrowser({ vault, vaultId, canEdit, onChangeEntriesType, onD
   const [renameDialogOpen, setRenameDialogOpen] = useState(false)
   const [isRenaming, setIsRenaming] = useState(false)
   const [renameError, setRenameError] = useState('')
+  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false)
+  const [isChangingVaultPassword, setIsChangingVaultPassword] = useState(false)
+  const [vaultPasswordError, setVaultPasswordError] = useState('')
   const [groupDialog, setGroupDialog] = useState<VaultGroupSummary | 'new' | null>(null)
   const [groupToDelete, setGroupToDelete] = useState<VaultGroupSummary | null>(null)
   const [openGroupMenuId, setOpenGroupMenuId] = useState('')
@@ -723,6 +760,19 @@ export function VaultBrowser({ vault, vaultId, canEdit, onChangeEntriesType, onD
     }
   }
 
+  async function changeVaultPassword(currentPassword: string, newPassword: string) {
+    setIsChangingVaultPassword(true)
+    setVaultPasswordError('')
+    try {
+      await onChangeVaultPassword(currentPassword, newPassword)
+      setPasswordDialogOpen(false)
+    } catch (error) {
+      setVaultPasswordError(error instanceof Error ? error.message : 'The vault password could not be changed safely.')
+    } finally {
+      setIsChangingVaultPassword(false)
+    }
+  }
+
   async function saveGroup(group: VaultGroupDraft) {
     setIsSavingGroup(true)
     setGroupError('')
@@ -892,7 +942,7 @@ export function VaultBrowser({ vault, vaultId, canEdit, onChangeEntriesType, onD
   const entryWidthMax = Math.max(entryColumnMinWidth, Math.round(gridWidth - folderColumnMinWidth - detailColumnMinWidth - columnResizeHandleWidth * 2))
 
   return <div className="vault-browser">
-    <header className="vault-browser-header"><div className="vault-browser-title"><div className="vault-browser-name-row"><h1>{vault.databaseName}</h1>{canEdit && <button aria-label="Rename vault" className="vault-name-action" disabled={isRenaming || isDeleting} onClick={() => { setRenameError(''); setRenameDialogOpen(true) }} title="Rename vault" type="button"><Pencil aria-hidden="true" size={15} /></button>}</div><p className="vault-browser-meta"><span>KDBX {vault.version}</span><span>{activeEntries.length} {activeEntries.length === 1 ? 'entry' : 'entries'}</span><span>Decrypted in memory</span></p></div><div className="vault-browser-actions"><button aria-label="Lock vault" className="button button-secondary button-icon" onClick={onLock} title="Lock vault" type="button"><LockKeyhole aria-hidden="true" /></button></div></header>
+    <header className="vault-browser-header"><div className="vault-browser-title"><div className="vault-browser-name-row"><h1>{vault.databaseName}</h1>{canEdit && <button aria-label="Rename vault" className="vault-name-action" disabled={isRenaming || isDeleting || isChangingVaultPassword} onClick={() => { setRenameError(''); setRenameDialogOpen(true) }} title="Rename vault" type="button"><Pencil aria-hidden="true" size={15} /></button>}</div><p className="vault-browser-meta"><span>KDBX {vault.version}</span><span>{activeEntries.length} {activeEntries.length === 1 ? 'entry' : 'entries'}</span><span>Decrypted in memory</span></p></div><div className="vault-browser-actions">{canEdit && <button aria-label="Change vault password" className="button button-secondary button-icon" disabled={isChangingVaultPassword || isRenaming} onClick={() => { setVaultPasswordError(''); setPasswordDialogOpen(true) }} title="Change vault password" type="button"><KeyRound aria-hidden="true" /></button>}<button aria-label="Lock vault" className="button button-secondary button-icon" disabled={isChangingVaultPassword} onClick={onLock} title="Lock vault" type="button"><LockKeyhole aria-hidden="true" /></button></div></header>
     {!canEdit && <p className="read-only-note">This device file is open read only. Connect and open its Dropbox copy to add or edit entries.</p>}
     <div className="vault-browser-grid" ref={vaultGridRef} style={columnWidths ? { gridTemplateColumns: `${columnWidths.folders}px ${columnResizeHandleWidth}px ${columnWidths.entries}px ${columnResizeHandleWidth}px minmax(${detailColumnMinWidth}px, 1fr)` } : undefined}>
       <aside className="group-list" aria-label="Vault folders" ref={folderColumnRef}>
@@ -1051,5 +1101,6 @@ export function VaultBrowser({ vault, vaultId, canEdit, onChangeEntriesType, onD
     {groupDialog && <GroupNameDialog error={groupError} group={groupDialog === 'new' ? null : groupDialog} isSaving={isSavingGroup} onCancel={() => { if (!isSavingGroup) { setGroupError(''); setGroupDialog(null) } }} onSave={(group) => void saveGroup(group)} rootGroupId={vault.rootGroupId} />}
     {groupToDelete && <DeleteGroupDialog error={groupError} group={groupToDelete} isDeleting={isSavingGroup} onCancel={() => { if (!isSavingGroup) { setGroupError(''); setGroupToDelete(null) } }} onDelete={() => void deleteGroup()} />}
     {renameDialogOpen && <RenameVaultDialog currentName={vault.databaseName} error={renameError} isSaving={isRenaming} onCancel={() => { if (!isRenaming) { setRenameError(''); setRenameDialogOpen(false) } }} onSave={(name) => void renameVault(name)} />}
+    {passwordDialogOpen && <ChangeVaultPasswordDialog error={vaultPasswordError} isSaving={isChangingVaultPassword} onCancel={() => { if (!isChangingVaultPassword) { setVaultPasswordError(''); setPasswordDialogOpen(false) } }} onSave={(currentPassword, newPassword) => void changeVaultPassword(currentPassword, newPassword)} vaultName={vault.databaseName} />}
   </div>
 }

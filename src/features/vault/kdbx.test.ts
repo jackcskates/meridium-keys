@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DOMParser as XmlDomParser, XMLSerializer as XmlSerializer } from '@xmldom/xmldom'
 import { Consts, Credentials, Kdbx, KdbxBinaries, KdbxUuid, ProtectedValue } from 'kdbxweb'
-import { configureArgon2, createKdbxData, exportKdbxEntriesTransfer, exportKdbxEntryTransfer, loadKdbxDatabase, prepareKdbxEntriesDelete, prepareKdbxEntriesImport, prepareKdbxEntriesMove, prepareKdbxEntriesPermanentDelete, prepareKdbxEntriesTypeChange, prepareKdbxEntryDelete, prepareKdbxEntryImport, prepareKdbxEntryMove, prepareKdbxEntrySave, prepareKdbxGroupDelete, prepareKdbxGroupSave, prepareKdbxVaultRename, readKdbxEntryDetails, readKdbxProtectedField, readKdbxSnapshot, VaultOpenError } from './kdbx'
+import { configureArgon2, createKdbxData, exportKdbxEntriesTransfer, exportKdbxEntryTransfer, loadKdbxDatabase, prepareKdbxEntriesDelete, prepareKdbxEntriesImport, prepareKdbxEntriesMove, prepareKdbxEntriesPermanentDelete, prepareKdbxEntriesTypeChange, prepareKdbxEntryDelete, prepareKdbxEntryImport, prepareKdbxEntryMove, prepareKdbxEntrySave, prepareKdbxGroupDelete, prepareKdbxGroupSave, prepareKdbxVaultPasswordChange, prepareKdbxVaultRename, readKdbxEntryDetails, readKdbxProtectedField, readKdbxSnapshot, VaultOpenError } from './kdbx'
 import { changeEntryDraftType, createEmptyEntryDraft, entryTypeDefinitions } from './entryTypes'
 
 // kdbxweb uses browser-native XML APIs in production. Supply the current,
@@ -384,6 +384,22 @@ describe('readKdbxSnapshot', () => {
     expect(reopened).toMatchObject({ databaseName: 'Imported Passwords', fileName: 'Imported Passwords.kdbx' })
     expect(reopened.entries).toContainEqual(expect.objectContaining({ title: 'Example Account' }))
     await expect(readKdbxSnapshot(prepared.data, 'wrong password')).rejects.toMatchObject({ code: 'INVALID_CREDENTIALS' })
+  })
+
+  it('verifies the current password and re-encrypts the complete vault with a new password', async () => {
+    const original = await createFixture(Consts.KdfId.Argon2id)
+    const database = await loadKdbxDatabase(original, fixturePassword)
+    const newPassword = 'new quartz harbor lantern 2026!'
+
+    await expect(prepareKdbxVaultPasswordChange(database, 'incorrect current password', newPassword, 'fixture.kdbx'))
+      .rejects.toMatchObject({ code: 'INVALID_CREDENTIALS', message: 'The current master password is incorrect.' })
+
+    const prepared = await prepareKdbxVaultPasswordChange(database, fixturePassword, newPassword, 'fixture.kdbx')
+    const reopened = await readKdbxSnapshot(prepared.data, newPassword, 'fixture.kdbx')
+
+    expect(reopened.entries).toContainEqual(expect.objectContaining({ title: 'Example Account' }))
+    await expect(readKdbxSnapshot(prepared.data, fixturePassword, 'fixture.kdbx'))
+      .rejects.toMatchObject({ code: 'INVALID_CREDENTIALS' })
   })
 
   it('moves an entry between folders without exposing or changing its protected fields', async () => {
