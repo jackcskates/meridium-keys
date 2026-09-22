@@ -1,5 +1,5 @@
 import { VaultOpenError } from './kdbx'
-import type { VaultEntryDetails, VaultEntryDraft, VaultEntryType, VaultGroupDraft, VaultSnapshot, VaultTransferEntry, VaultWorkerRequest, VaultWorkerResponse } from './types'
+import type { VaultEntryDetails, VaultEntryDraft, VaultGroupDraft, VaultSnapshot, VaultTransferEntry, VaultWorkerRequest, VaultWorkerResponse } from './types'
 
 export const maxVaultFileSize = 64 * 1024 * 1024
 
@@ -118,12 +118,6 @@ export class UnlockedVaultSession {
   async prepareEntriesPermanentDelete(entryIds: string[]): Promise<PreparedVaultChange> {
     const message = await this.request((requestId) => ({ type: 'prepare-entries-permanent-delete', entryIds, requestId }))
     if (message.type !== 'change-prepared') throw new VaultOpenError('WORKER_FAILURE', 'The secure vault worker returned an unexpected permanent delete response.')
-    return { changeId: message.changeId, data: message.data, vault: message.vault }
-  }
-
-  async prepareEntriesTypeChange(entryIds: string[], entryType: VaultEntryType): Promise<PreparedVaultChange> {
-    const message = await this.request((requestId) => ({ type: 'prepare-entries-type-change', entryIds, entryType, requestId }))
-    if (message.type !== 'change-prepared') throw new VaultOpenError('WORKER_FAILURE', 'The secure vault worker returned an unexpected type-change response.')
     return { changeId: message.changeId, data: message.data, vault: message.vault }
   }
 

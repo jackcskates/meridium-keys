@@ -104,10 +104,10 @@ Last verified: 2026-09-22.
   mode keeps the filter available and adds an aligned select-all checkbox for
   the filtered results; editing the query clears selection to prevent hidden
   entries from being included accidentally.
-- Click the selected entry’s type icon to convert it, or bulk-convert selected
-  entries to any other supported type. Individual conversion resolves each
-  source-only field as Preserve or Remove and collects missing required fields
-  before recording KDBX history and saving the encrypted revision.
+- Entry types are fixed after creation. Type icons remain visible, non-interactive
+  references; changing formats requires creating the desired type and manually
+  transposing the values. The former individual and bulk conversion paths were
+  removed after they proved unstable in imported vaults.
 - A right-side Generate action on service password fields creates a securely
   randomized 20-character value with guaranteed uppercase, lowercase, number,
   and compatibility-focused symbol characters.

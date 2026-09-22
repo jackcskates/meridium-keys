@@ -24,7 +24,7 @@ import type {
   VaultSnapshot,
   VaultTransferEntry,
 } from './types'
-import { allTypedFieldDefinitions, entryTypeMetadataKey, entryTypeLabel, getEntryTypeDefinition, isVaultEntryType } from './entryTypes'
+import { allTypedFieldDefinitions, entryTypeMetadataKey, getEntryTypeDefinition, isVaultEntryType } from './entryTypes'
 import { vaultPasswordReady } from './passwordPolicy'
 
 const currentArgon2Version = 0x13
@@ -426,11 +426,6 @@ export async function prepareKdbxEntrySave(database: Kdbx, draft: VaultEntryDraf
     const requiredField = definition.fields.find((field) => field.required && !draft.fields[field.key]?.trim())
     if (requiredField) throw new VaultOpenError('WORKER_FAILURE', `Enter ${requiredField.label.toLowerCase()} before saving this entry.`)
 
-    const targetStorageKeys = new Set(definition.fields.map((field) => field.storageKey))
-    for (const fieldKey of draft.removedFieldKeys || []) {
-      const field = allTypedFieldDefinitions().find((candidate) => candidate.key === fieldKey)
-      if (field && !targetStorageKeys.has(field.storageKey)) entry.fields.delete(field.storageKey)
-    }
     entry.fields.set('Title', draft.title.trim())
     if (!draft.id) {
       entry.fields.set('UserName', '')
@@ -458,39 +453,6 @@ export async function prepareKdbxEntrySave(database: Kdbx, draft: VaultEntryDraf
       vault: mapKdbxSnapshot(workingDatabase, fileName),
       entryId: entry.uuid.toString(),
     }
-  } catch (error) {
-    throw mapKdbxError(error)
-  }
-}
-
-export async function prepareKdbxEntriesTypeChange(database: Kdbx, entryIds: string[], type: VaultEntryType, fileName: string) {
-  const uniqueEntryIds = [...new Set(entryIds)]
-  if (!uniqueEntryIds.length) throw new VaultOpenError('WORKER_FAILURE', 'Select at least one entry to change its type.')
-
-  try {
-    const clonedData = await database.save()
-    const workingDatabase = await Kdbx.load(clonedData, database.credentials)
-    const entries = uniqueEntryIds.map((entryId) => findEntry(workingDatabase, entryId))
-    if (entries.some((entry) => !entry?.parentGroup)) {
-      throw new VaultOpenError('WORKER_FAILURE', 'One or more selected entries no longer exist in the open vault.')
-    }
-    const recycleBinId = workingDatabase.meta.recycleBinUuid?.toString() || ''
-    const definition = getEntryTypeDefinition(type)
-    for (const entry of entries as KdbxEntry[]) {
-      if (entry.parentGroup && groupIsInRecycleBin(entry.parentGroup, recycleBinId)) {
-        throw new VaultOpenError('WORKER_FAILURE', 'Restore Recycle Bin entries before changing their type.')
-      }
-      const requiredField = definition.fields.find((field) => field.required && !entryFieldText(entry, field.storageKey).trim())
-      if (requiredField) {
-        const title = entryFieldText(entry, 'Title').trim() || 'Untitled entry'
-        throw new VaultOpenError('WORKER_FAILURE', `${title} needs ${requiredField.label.toLowerCase()} before it can become ${entryTypeLabel(type)}.`)
-      }
-      entry.pushHistory()
-      entry.fields.set(entryTypeMetadataKey, type)
-      entry.times.update()
-    }
-    const data = await workingDatabase.save()
-    return { database: workingDatabase, data, vault: mapKdbxSnapshot(workingDatabase, fileName) }
   } catch (error) {
     throw mapKdbxError(error)
   }

@@ -9,7 +9,7 @@ import { entryDragMime, VaultBrowser } from './features/vault/VaultBrowser'
 import { createVaultFile, toVaultFileName, type CreateVaultStage } from './features/vault/createVault'
 import { VaultOpenError } from './features/vault/kdbx'
 import { vaultPasswordRequirements } from './features/vault/passwordPolicy'
-import type { VaultEntryDraft, VaultEntrySummary, VaultEntryType, VaultGroupDraft, VaultMoveDestination, VaultSnapshot } from './features/vault/types'
+import type { VaultEntryDraft, VaultEntrySummary, VaultGroupDraft, VaultMoveDestination, VaultSnapshot } from './features/vault/types'
 import { openVaultSession, type PreparedVaultChange, type UnlockedVaultSession, type UnlockStage } from './features/vault/unlockVault'
 import './App.css'
 
@@ -764,12 +764,6 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
     return persistPreparedVaultChange(await session.prepareEntriesPermanentDelete(entryIds))
   }
 
-  async function changeVaultEntriesType(entryIds: string[], entryType: VaultEntryType) {
-    const session = vaultSessionRef.current
-    if (!session) throw new Error('The vault is locked. Open it again before changing entry types.')
-    return persistPreparedVaultChange(await session.prepareEntriesTypeChange(entryIds, entryType))
-  }
-
   async function changeOpenVaultPassword(currentPassword: string, newPassword: string) {
     const session = vaultSessionRef.current
     if (!session) throw new Error('The vault is locked. Open it again before changing its password.')
@@ -1192,7 +1186,6 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
               onChangeVaultPassword={changeOpenVaultPassword}
               onEntryDragEnd={clearVaultEntryDrag}
               onEntryDragStart={(entry) => { if (activeDropboxVaultId) setDraggedVaultEntry({ ...entry, sourceVaultId: activeDropboxVaultId }) }}
-              onChangeEntriesType={changeVaultEntriesType}
               onDeleteEntriesForever={deleteVaultEntriesForever}
               onDeleteGroup={deleteVaultGroup}
               onDeleteEntry={deleteVaultEntry}

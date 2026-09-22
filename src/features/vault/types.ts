@@ -30,7 +30,6 @@ export type VaultEntryDraft = {
   type: VaultEntryType
   title: string
   fields: Record<string, string>
-  removedFieldKeys?: string[]
 }
 
 export type VaultEntryDetails = VaultEntryDraft & {
@@ -117,7 +116,6 @@ export type VaultWorkerRequest =
   | { type: 'prepare-entry-delete'; entryId: string; requestId: string }
   | { type: 'prepare-entries-delete'; entryIds: string[]; requestId: string }
   | { type: 'prepare-entries-permanent-delete'; entryIds: string[]; requestId: string }
-  | { type: 'prepare-entries-type-change'; entryIds: string[]; entryType: VaultEntryType; requestId: string }
   | { type: 'prepare-entry-move'; entryId: string; groupId: string; requestId: string }
   | { type: 'prepare-entries-move'; entryIds: string[]; groupId: string; requestId: string }
   | { type: 'prepare-group-save'; group: VaultGroupDraft; requestId: string }

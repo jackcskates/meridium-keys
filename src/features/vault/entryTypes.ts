@@ -150,30 +150,6 @@ export function allTypedFieldDefinitions() {
   return [...fields.values()]
 }
 
-export function changeEntryDraftType(draft: VaultEntryDraft, type: VaultEntryType): VaultEntryDraft {
-  if (draft.type === type) return draft
-  const sourceFields = new Map(getEntryTypeDefinition(draft.type).fields.map((field) => [field.storageKey, field]))
-  const fields = { ...draft.fields }
-  for (const targetField of getEntryTypeDefinition(type).fields) {
-    if (fields[targetField.key] !== undefined) continue
-    const sourceField = sourceFields.get(targetField.storageKey)
-    fields[targetField.key] = sourceField ? fields[sourceField.key] || '' : ''
-  }
-  return { ...draft, type, fields }
-}
-
-export function entryTypeConflicts(draft: VaultEntryDraft, type: VaultEntryType) {
-  const targetStorageKeys = new Set(getEntryTypeDefinition(type).fields.map((field) => field.storageKey))
-  return getEntryTypeDefinition(draft.type).fields
-    .filter((field) => !targetStorageKeys.has(field.storageKey) && Boolean(draft.fields[field.key]?.trim()))
-    .map((field) => ({ field, value: draft.fields[field.key] }))
-}
-
-export function missingRequiredEntryFields(draft: VaultEntryDraft) {
-  return getEntryTypeDefinition(draft.type).fields
-    .filter((field) => field.required && !draft.fields[field.key]?.trim())
-}
-
 export function entryMatchesKeyword(entry: Pick<VaultEntrySummary, 'title' | 'subtitle' | 'type'>, keyword: string) {
   const normalizedKeyword = keyword.trim().toLocaleLowerCase()
   if (!normalizedKeyword) return true

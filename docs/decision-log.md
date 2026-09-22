@@ -386,7 +386,7 @@ they never existed; mark them superseded and link to the replacement.
 
 ### D-044 - Reversible entry-type conversion
 
-- **Status:** Accepted
+- **Status:** Superseded by D-048
 - **Decision:** Make the selected entry’s type icon the direct type-change
   control, with bulk conversion also available from folder selection. When the
   destination does not display a populated source field, require a resolution
@@ -443,6 +443,19 @@ they never existed; mark them superseded and link to the replacement.
 - **Reason:** A master-password rotation must protect the complete portable KDBX
   without creating a second vault, losing entry data, or leaving the open worker
   on credentials that do not match the remote encrypted revision.
+
+### D-048 - Fixed entry types after creation
+
+- **Status:** Accepted
+- **Decision:** Remove individual and bulk entry-type conversion, including the
+  clickable type icon, field-conflict workflow, worker operation, and conversion
+  metadata mutations. Keep type icons as read-only references. To use another
+  format, create a new entry of that type, transpose the values deliberately,
+  then remove the old entry when satisfied.
+- **Reason:** Conversion was unstable with imported KDBX records and could crash
+  the working surface. Explicit transcription is slower but predictable during
+  the current migration, preserves the original until the replacement is
+  verified, and eliminates a high-risk mutation path.
 
 ## Open
 

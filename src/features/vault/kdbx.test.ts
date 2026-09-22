@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { DOMParser as XmlDomParser, XMLSerializer as XmlSerializer } from '@xmldom/xmldom'
 import { Consts, Credentials, Kdbx, KdbxBinaries, KdbxUuid, ProtectedValue } from 'kdbxweb'
-import { configureArgon2, createKdbxData, exportKdbxEntriesTransfer, exportKdbxEntryTransfer, loadKdbxDatabase, prepareKdbxEntriesDelete, prepareKdbxEntriesImport, prepareKdbxEntriesMove, prepareKdbxEntriesPermanentDelete, prepareKdbxEntriesTypeChange, prepareKdbxEntryDelete, prepareKdbxEntryImport, prepareKdbxEntryMove, prepareKdbxEntrySave, prepareKdbxGroupDelete, prepareKdbxGroupSave, prepareKdbxVaultPasswordChange, prepareKdbxVaultRename, readKdbxEntryDetails, readKdbxProtectedField, readKdbxSnapshot, VaultOpenError } from './kdbx'
-import { changeEntryDraftType, createEmptyEntryDraft, entryTypeDefinitions } from './entryTypes'
+import { configureArgon2, createKdbxData, exportKdbxEntriesTransfer, exportKdbxEntryTransfer, loadKdbxDatabase, prepareKdbxEntriesDelete, prepareKdbxEntriesImport, prepareKdbxEntriesMove, prepareKdbxEntriesPermanentDelete, prepareKdbxEntryDelete, prepareKdbxEntryImport, prepareKdbxEntryMove, prepareKdbxEntrySave, prepareKdbxGroupDelete, prepareKdbxGroupSave, prepareKdbxVaultPasswordChange, prepareKdbxVaultRename, readKdbxEntryDetails, readKdbxProtectedField, readKdbxSnapshot, VaultOpenError } from './kdbx'
+import { createEmptyEntryDraft, entryTypeDefinitions } from './entryTypes'
 
 // kdbxweb uses browser-native XML APIs in production. Supply the current,
 // patched xmldom implementation only when these compatibility tests run in Node.
@@ -147,81 +147,6 @@ describe('readKdbxSnapshot', () => {
     expect(updated).toMatchObject({ title: 'Updated Account', type: 'login', fields: expect.objectContaining({ password: 'updated-secret' }) })
     const reopenedEntry = [...reopened.getDefaultGroup().allEntries()].find((entry) => entry.uuid.toString() === existing.id)
     expect(reopenedEntry?.history).toHaveLength(1)
-  })
-
-  it('changes one or more entry types while preserving fields outside the new format', async () => {
-    const original = await createKdbxData('Type Change Fixture', fixturePassword)
-    let database = await loadKdbxDatabase(original, fixturePassword)
-    const groupId = database.getDefaultGroup().uuid.toString()
-    const entryIds: string[] = []
-    for (const title of ['First Login', 'Second Login']) {
-      const prepared = await prepareKdbxEntrySave(database, {
-        groupId,
-        type: 'login',
-        title,
-        fields: {
-          username: `${title.toLowerCase().replace(' ', '.')}@example.test`,
-          password: `${title}-secret`,
-          url: 'https://example.test',
-          notes: 'Preserve every shared field',
-        },
-      }, 'type-change.kdbx')
-      database = prepared.database
-      entryIds.push(prepared.entryId)
-    }
-
-    const changed = await prepareKdbxEntriesTypeChange(database, entryIds, 'password', 'type-change.kdbx')
-    const reopened = await loadKdbxDatabase(changed.data, fixturePassword)
-
-    for (const entryId of entryIds) {
-      const details = readKdbxEntryDetails(reopened, entryId)
-      expect(details.type).toBe('password')
-      expect(details.fields.password).toContain('Login-secret')
-      expect(details.fields.username).toContain('@example.test')
-      const kdbxEntry = [...reopened.getDefaultGroup().allEntries()].find((entry) => entry.uuid.toString() === entryId)
-      expect(kdbxEntry?.history).toHaveLength(1)
-    }
-
-    const restored = await prepareKdbxEntriesTypeChange(reopened, entryIds, 'login', 'type-change.kdbx')
-    const restoredDatabase = await loadKdbxDatabase(restored.data, fixturePassword)
-    expect(entryIds.map((entryId) => readKdbxEntryDetails(restoredDatabase, entryId).fields.username)).toEqual([
-      'first.login@example.test',
-      'second.login@example.test',
-    ])
-  })
-
-  it('does not change an entry to a format when a required destination field is empty', async () => {
-    const original = await createKdbxData('Required Type Fixture', fixturePassword)
-    const database = await loadKdbxDatabase(original, fixturePassword)
-    const created = await prepareKdbxEntrySave(database, {
-      groupId: database.getDefaultGroup().uuid.toString(),
-      type: 'login',
-      title: 'Passwordless Login',
-      fields: { username: 'owner@example.test', password: '', url: '', notes: '' },
-    }, 'required-type.kdbx')
-
-    await expect(prepareKdbxEntriesTypeChange(created.database, [created.entryId], 'password', 'required-type.kdbx'))
-      .rejects.toThrow('needs password before it can become Password')
-  })
-
-  it('applies an explicit conflict resolution without removing destination fields', async () => {
-    const original = await createKdbxData('Resolved Type Fixture', fixturePassword)
-    const database = await loadKdbxDatabase(original, fixturePassword)
-    const created = await prepareKdbxEntrySave(database, {
-      groupId: database.getDefaultGroup().uuid.toString(),
-      type: 'login',
-      title: 'Resolved Login',
-      fields: { username: 'remove-me@example.test', password: 'keep-this-secret', url: 'https://example.test', notes: '' },
-    }, 'resolved-type.kdbx')
-    const details = readKdbxEntryDetails(created.database, created.entryId)
-    const converted = changeEntryDraftType(details, 'password')
-    const resolved = await prepareKdbxEntrySave(created.database, { ...converted, removedFieldKeys: ['username', 'password'] }, 'resolved-type.kdbx')
-    const reopened = await loadKdbxDatabase(resolved.data, fixturePassword)
-    const reopenedDetails = readKdbxEntryDetails(reopened, created.entryId)
-
-    expect(reopenedDetails.type).toBe('password')
-    expect(reopenedDetails.fields.username).toBe('')
-    expect(reopenedDetails.fields.password).toBe('keep-this-secret')
   })
 
   it('copies a complete entry into another vault root with protected custom fields and attachments', async () => {
