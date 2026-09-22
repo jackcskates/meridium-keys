@@ -28,10 +28,10 @@ future possibilities.
   overflow menu, using standard KDBX recycle behavior.
 - Keep entries directly in the vault root through the explicit “No folder” choice.
 - Create and edit all ten confirmed entry types through type-specific forms.
-- Change an existing entry’s type from its Edit form, or bulk-change selected
-  entries in the current folder. Shared values populate the new format,
-  destination requirements are validated, and fields outside the new format
-  remain preserved in the standard KDBX entry.
+- Click the selected entry’s type icon to change its format, or bulk-change
+  selected entries in the current folder. Shared values populate the new
+  format. A resolution screen handles source-only fields and missing destination
+  requirements before the standard KDBX entry is saved.
 - Identify every entry type with its own Lucide icon before the entry title.
 - Delete entries into the standard KDBX Recycle Bin.
 - Select any number of entries in the current folder and permanently delete them

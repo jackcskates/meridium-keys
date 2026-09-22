@@ -162,6 +162,18 @@ export function changeEntryDraftType(draft: VaultEntryDraft, type: VaultEntryTyp
   return { ...draft, type, fields }
 }
 
+export function entryTypeConflicts(draft: VaultEntryDraft, type: VaultEntryType) {
+  const targetStorageKeys = new Set(getEntryTypeDefinition(type).fields.map((field) => field.storageKey))
+  return getEntryTypeDefinition(draft.type).fields
+    .filter((field) => !targetStorageKeys.has(field.storageKey) && Boolean(draft.fields[field.key]?.trim()))
+    .map((field) => ({ field, value: draft.fields[field.key] }))
+}
+
+export function missingRequiredEntryFields(draft: VaultEntryDraft) {
+  return getEntryTypeDefinition(draft.type).fields
+    .filter((field) => field.required && !draft.fields[field.key]?.trim())
+}
+
 export function entryTypeLabel(type: VaultEntryType) {
   return getEntryTypeDefinition(type).label
 }

@@ -308,6 +308,11 @@ export async function prepareKdbxEntrySave(database: Kdbx, draft: VaultEntryDraf
     const requiredField = definition.fields.find((field) => field.required && !draft.fields[field.key]?.trim())
     if (requiredField) throw new VaultOpenError('WORKER_FAILURE', `Enter ${requiredField.label.toLowerCase()} before saving this entry.`)
 
+    const targetStorageKeys = new Set(definition.fields.map((field) => field.storageKey))
+    for (const fieldKey of draft.removedFieldKeys || []) {
+      const field = allTypedFieldDefinitions().find((candidate) => candidate.key === fieldKey)
+      if (field && !targetStorageKeys.has(field.storageKey)) entry.fields.delete(field.storageKey)
+    }
     entry.fields.set('Title', draft.title.trim())
     if (!draft.id) {
       entry.fields.set('UserName', '')

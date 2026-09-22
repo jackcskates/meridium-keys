@@ -387,10 +387,12 @@ they never existed; mark them superseded and link to the replacement.
 ### D-044 - Reversible entry-type conversion
 
 - **Status:** Accepted
-- **Decision:** Allow type changes from an individual entry’s Edit form and from
-  bulk selection within the current folder. Update the Meridium type metadata,
-  validate every required destination field, push standard KDBX history, and
-  preserve existing fields that the destination format does not display.
+- **Decision:** Make the selected entry’s type icon the direct type-change
+  control, with bulk conversion also available from folder selection. When the
+  destination does not display a populated source field, require a resolution
+  screen where that field is explicitly preserved in KDBX or removed. Collect
+  any missing required destination fields before saving, update the Meridium
+  type metadata, and push standard KDBX history.
 - **Reason:** Imported entries are often inferred as Login even when Password or
   another format is more accurate. Retagging should be efficient and must not
   silently destroy usernames, secrets, URLs, notes, or custom KDBX fields.

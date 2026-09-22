@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { DOMParser as XmlDomParser, XMLSerializer as XmlSerializer } from '@xmldom/xmldom'
 import { Consts, Credentials, Kdbx, ProtectedValue } from 'kdbxweb'
 import { configureArgon2, createKdbxData, loadKdbxDatabase, prepareKdbxEntriesPermanentDelete, prepareKdbxEntriesTypeChange, prepareKdbxEntryDelete, prepareKdbxEntryMove, prepareKdbxEntrySave, prepareKdbxGroupDelete, prepareKdbxGroupSave, prepareKdbxVaultRename, readKdbxEntryDetails, readKdbxProtectedField, readKdbxSnapshot, VaultOpenError } from './kdbx'
-import { createEmptyEntryDraft, entryTypeDefinitions } from './entryTypes'
+import { changeEntryDraftType, createEmptyEntryDraft, entryTypeDefinitions } from './entryTypes'
 
 // kdbxweb uses browser-native XML APIs in production. Supply the current,
 // patched xmldom implementation only when these compatibility tests run in Node.
@@ -202,6 +202,26 @@ describe('readKdbxSnapshot', () => {
 
     await expect(prepareKdbxEntriesTypeChange(created.database, [created.entryId], 'password', 'required-type.kdbx'))
       .rejects.toThrow('needs password before it can become Password')
+  })
+
+  it('applies an explicit conflict resolution without removing destination fields', async () => {
+    const original = await createKdbxData('Resolved Type Fixture', fixturePassword)
+    const database = await loadKdbxDatabase(original, fixturePassword)
+    const created = await prepareKdbxEntrySave(database, {
+      groupId: database.getDefaultGroup().uuid.toString(),
+      type: 'login',
+      title: 'Resolved Login',
+      fields: { username: 'remove-me@example.test', password: 'keep-this-secret', url: 'https://example.test', notes: '' },
+    }, 'resolved-type.kdbx')
+    const details = readKdbxEntryDetails(created.database, created.entryId)
+    const converted = changeEntryDraftType(details, 'password')
+    const resolved = await prepareKdbxEntrySave(created.database, { ...converted, removedFieldKeys: ['username', 'password'] }, 'resolved-type.kdbx')
+    const reopened = await loadKdbxDatabase(resolved.data, fixturePassword)
+    const reopenedDetails = readKdbxEntryDetails(reopened, created.entryId)
+
+    expect(reopenedDetails.type).toBe('password')
+    expect(reopenedDetails.fields.username).toBe('')
+    expect(reopenedDetails.fields.password).toBe('keep-this-secret')
   })
 
   it('decrypts only a requested protected field for direct copy', async () => {

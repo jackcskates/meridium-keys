@@ -30,6 +30,7 @@ export type VaultEntryDraft = {
   type: VaultEntryType
   title: string
   fields: Record<string, string>
+  removedFieldKeys?: string[]
 }
 
 export type VaultEntryDetails = VaultEntryDraft & {

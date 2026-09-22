@@ -98,9 +98,10 @@ Last verified: 2026-09-22.
   fields remain readable in compatible KeePass applications. Lucide type icons
   precede entry titles in the folder navigator, entry list, type picker, and
   selected-entry header.
-- Convert one entry from its Edit form or bulk-convert selected entries to any
-  other supported type. Conversion validates fields required by the destination,
-  records KDBX history, and preserves source fields outside the visible format.
+- Click the selected entry’s type icon to convert it, or bulk-convert selected
+  entries to any other supported type. Individual conversion resolves each
+  source-only field as Preserve or Remove and collects missing required fields
+  before recording KDBX history and saving the encrypted revision.
 - A right-side Generate action on service password fields creates a securely
   randomized 20-character value with guaranteed uppercase, lowercase, number,
   and compatibility-focused symbol characters.
