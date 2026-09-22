@@ -72,7 +72,9 @@ future possibilities.
 - Choose an entry type first, then create or edit the fields for that type.
 - Compact, in-memory keyword filtering within the currently selected folder by
   entry name, visible subtitle, or type label. The filter clears when changing
-  folders and never creates a persistent plaintext index.
+  folders and never creates a persistent plaintext index. In selection mode, a
+  checkbox aligned above the entry checkbox column selects or clears every
+  filtered result for bulk actions; changing the query clears the selection.
 
 **Proposed:**
 

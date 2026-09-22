@@ -403,7 +403,9 @@ they never existed; mark them superseded and link to the replacement.
 - **Decision:** Place a small keyword filter directly beneath the Keys heading.
   Filter only the current folder's already-decrypted entry summaries by name,
   visible subtitle, or type label; clear the query when navigating folders and
-  never persist a plaintext search index.
+  never persist a plaintext search index. Keep the filter in selection mode and
+  align select-all above the checkbox column. Select-all targets only filtered
+  results, and any query change clears selection before another bulk action.
 - **Reason:** Gardening a populated vault needs fast narrowing without turning
   the utility column into a large search surface or decrypting additional
   protected fields.

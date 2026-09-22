@@ -1323,6 +1323,37 @@ h1 {
 .entry-search button:hover,
 .entry-search button:focus-visible { color: var(--text-primary); background: var(--surface-3); }
 
+.entry-select-all-row {
+  min-height: 31px;
+  padding: 2px 9px 5px;
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  color: var(--text-tertiary);
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 0.67rem;
+  font-weight: 600;
+}
+
+.entry-select-all {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  color: var(--text-tertiary);
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.entry-select-all:hover,
+.entry-select-all:focus-visible,
+.entry-select-all[aria-checked='true'] { color: var(--brand-meridium); background: var(--surface-2); }
+.entry-select-all:disabled { opacity: 0.35; cursor: not-allowed; }
+
 .panel-action {
   width: 32px;
   height: 32px;

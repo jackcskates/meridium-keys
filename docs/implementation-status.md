@@ -100,7 +100,10 @@ Last verified: 2026-09-22.
   selected-entry header.
 - A compact filter at the top of the Keys list matches the current folder's
   entry names, visible subtitles, and type labels entirely in memory. It clears
-  on folder navigation and does not persist a plaintext search index.
+  on folder navigation and does not persist a plaintext search index. Selection
+  mode keeps the filter available and adds an aligned select-all checkbox for
+  the filtered results; editing the query clears selection to prevent hidden
+  entries from being included accidentally.
 - Click the selected entry’s type icon to convert it, or bulk-convert selected
   entries to any other supported type. Individual conversion resolves each
   source-only field as Preserve or Remove and collects missing required fields
