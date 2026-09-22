@@ -898,7 +898,7 @@ export function VaultBrowser({ vault, canEdit, onChangeEntriesType, onDeleteEntr
             onDragEnd={() => { const wasActive = Boolean(nativeDragEntryIdRef.current); clearDragState(); if (wasActive && !isMovingEntry) setMoveStatus('Move canceled. Drop entries on No folder or another folder.') }}
             onDragStart={(event) => beginNativeDrag(event, entry)}
             type="button"
-          >{selectionMode && <span className="entry-selection-mark" aria-hidden="true">{selectedVisibleEntryIds.has(entry.id) ? <CheckSquare size={19} /> : <Square size={19} />}</span>}<span className="entry-glyph"><EntryTypeIcon type={entry.type} /></span><span><strong>{entry.title}</strong><small>{entry.subtitle}</small></span></button>
+          >{selectionMode && <span className="entry-selection-mark" aria-hidden="true">{selectedVisibleEntryIds.has(entry.id) ? <CheckSquare size={19} /> : <Square size={19} />}</span>}<span className="entry-type-reference"><EntryTypeIcon size={16} type={entry.type} /></span><span><strong>{entry.title}</strong><small>{entry.subtitle}</small></span></button>
           {!selectionMode && canEdit && !entry.isDeleted && <button
             aria-label={`Drag ${entry.title} to a folder`}
             className="entry-drag-handle"

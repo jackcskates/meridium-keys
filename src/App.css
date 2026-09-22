@@ -1415,9 +1415,9 @@ h1 {
 .entry-row-open {
   padding: 7px 9px;
   display: grid;
-  grid-template-columns: 36px minmax(0, 1fr);
+  grid-template-columns: 18px minmax(0, 1fr);
   align-items: center;
-  gap: 10px;
+  gap: 9px;
 }
 
 .entry-row.is-selecting {
@@ -1425,7 +1425,7 @@ h1 {
 }
 
 .entry-row.is-selecting .entry-row-open {
-  grid-template-columns: 24px 36px minmax(0, 1fr);
+  grid-template-columns: 24px 18px minmax(0, 1fr);
 }
 
 .entry-selection-mark {
@@ -1440,6 +1440,16 @@ h1 {
 }
 
 .entry-row.is-bulk-selected .entry-selection-mark { color: var(--brand-meridium); }
+
+.entry-type-reference {
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  color: var(--text-tertiary);
+}
+
+.entry-row.is-selected .entry-type-reference { color: var(--text-secondary); }
 
 .entry-row-open > span:last-child {
   min-width: 0;
