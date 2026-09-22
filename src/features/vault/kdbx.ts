@@ -316,57 +316,75 @@ export function exportKdbxEntryTransfer(database: Kdbx, entryId: string): VaultT
   }
 }
 
-export async function prepareKdbxEntryImport(database: Kdbx, transfer: VaultTransferEntry, fileName: string) {
+export function exportKdbxEntriesTransfer(database: Kdbx, entryIds: string[]) {
+  const uniqueEntryIds = [...new Set(entryIds)]
+  if (!uniqueEntryIds.length) throw new VaultOpenError('WORKER_FAILURE', 'Select at least one entry to transfer.')
+  return uniqueEntryIds.map((entryId) => exportKdbxEntryTransfer(database, entryId))
+}
+
+async function importTransferEntry(workingDatabase: Kdbx, transfer: VaultTransferEntry) {
+  const entry = workingDatabase.createEntry(workingDatabase.getDefaultGroup())
+  entry.fields.clear()
+  for (const field of transfer.fields) {
+    entry.fields.set(field.name, field.protected ? ProtectedValue.fromString(field.value) : field.value)
+  }
+  entry.fields.set('Title', transfer.title.trim() || 'Untitled')
+  entry.fields.set(entryTypeMetadataKey, transfer.type)
+  entry.icon = transfer.icon
+  entry.fgColor = transfer.foregroundColor
+  entry.bgColor = transfer.backgroundColor
+  entry.overrideUrl = transfer.overrideUrl
+  entry.tags = [...transfer.tags]
+  entry.qualityCheck = transfer.qualityCheck
+  if (transfer.autoType) entry.autoType = {
+    enabled: transfer.autoType.enabled,
+    obfuscation: transfer.autoType.obfuscation,
+    defaultSequence: transfer.autoType.defaultSequence,
+    items: transfer.autoType.items.map((item) => ({ ...item })),
+  }
+  entry.customData = transfer.customData ? new Map(transfer.customData.map((item) => [item.key, { value: item.value, lastModified: item.lastModified ? new Date(item.lastModified) : undefined }])) : undefined
+  if (transfer.customIcon) {
+    const customIconId = KdbxUuid.random()
+    workingDatabase.meta.customIcons.set(customIconId.toString(), {
+      data: transfer.customIcon.data.slice(0),
+      name: transfer.customIcon.name,
+      lastModified: transfer.customIcon.lastModified ? new Date(transfer.customIcon.lastModified) : undefined,
+    })
+    entry.customIcon = customIconId
+  }
+  entry.binaries.clear()
+  for (const attachment of transfer.attachments) {
+    const data = attachment.data.slice(0)
+    const value = attachment.protected ? ProtectedValue.fromBinary(data) : data
+    entry.binaries.set(attachment.name, await workingDatabase.binaries.add(value))
+  }
+  entry.times.update()
+  return entry
+}
+
+export async function prepareKdbxEntriesImport(database: Kdbx, transfers: VaultTransferEntry[], fileName: string) {
+  if (!transfers.length) throw new VaultOpenError('WORKER_FAILURE', 'Select at least one entry to import.')
   try {
     const clonedData = await database.save()
     const workingDatabase = await Kdbx.load(clonedData, database.credentials)
-    const entry = workingDatabase.createEntry(workingDatabase.getDefaultGroup())
-    entry.fields.clear()
-    for (const field of transfer.fields) {
-      entry.fields.set(field.name, field.protected ? ProtectedValue.fromString(field.value) : field.value)
-    }
-    entry.fields.set('Title', transfer.title.trim() || 'Untitled')
-    entry.fields.set(entryTypeMetadataKey, transfer.type)
-    entry.icon = transfer.icon
-    entry.fgColor = transfer.foregroundColor
-    entry.bgColor = transfer.backgroundColor
-    entry.overrideUrl = transfer.overrideUrl
-    entry.tags = [...transfer.tags]
-    entry.qualityCheck = transfer.qualityCheck
-    if (transfer.autoType) entry.autoType = {
-      enabled: transfer.autoType.enabled,
-      obfuscation: transfer.autoType.obfuscation,
-      defaultSequence: transfer.autoType.defaultSequence,
-      items: transfer.autoType.items.map((item) => ({ ...item })),
-    }
-    entry.customData = transfer.customData ? new Map(transfer.customData.map((item) => [item.key, { value: item.value, lastModified: item.lastModified ? new Date(item.lastModified) : undefined }])) : undefined
-    if (transfer.customIcon) {
-      const customIconId = KdbxUuid.random()
-      workingDatabase.meta.customIcons.set(customIconId.toString(), {
-        data: transfer.customIcon.data.slice(0),
-        name: transfer.customIcon.name,
-        lastModified: transfer.customIcon.lastModified ? new Date(transfer.customIcon.lastModified) : undefined,
-      })
-      entry.customIcon = customIconId
-    }
-    entry.binaries.clear()
-    for (const attachment of transfer.attachments) {
-      const data = attachment.data.slice(0)
-      const value = attachment.protected ? ProtectedValue.fromBinary(data) : data
-      entry.binaries.set(attachment.name, await workingDatabase.binaries.add(value))
-    }
-    entry.times.update()
+    const entries: KdbxEntry[] = []
+    for (const transfer of transfers) entries.push(await importTransferEntry(workingDatabase, transfer))
 
     const data = await workingDatabase.save()
     return {
       database: workingDatabase,
       data,
       vault: mapKdbxSnapshot(workingDatabase, fileName),
-      entryId: entry.uuid.toString(),
+      entryIds: entries.map((entry) => entry.uuid.toString()),
     }
   } catch (error) {
     throw mapKdbxError(error)
   }
+}
+
+export async function prepareKdbxEntryImport(database: Kdbx, transfer: VaultTransferEntry, fileName: string) {
+  const prepared = await prepareKdbxEntriesImport(database, [transfer], fileName)
+  return { ...prepared, entryId: prepared.entryIds[0] }
 }
 
 export function readKdbxProtectedField(database: Kdbx, entryId: string, fieldKey: string) {
@@ -554,6 +572,22 @@ export async function prepareKdbxEntryDelete(database: Kdbx, entryId: string, fi
   }
 }
 
+export async function prepareKdbxEntriesDelete(database: Kdbx, entryIds: string[], fileName: string) {
+  const uniqueEntryIds = [...new Set(entryIds)]
+  if (!uniqueEntryIds.length) throw new VaultOpenError('WORKER_FAILURE', 'Select at least one entry to move to the Recycle Bin.')
+  try {
+    const clonedData = await database.save()
+    const workingDatabase = await Kdbx.load(clonedData, database.credentials)
+    const entries = uniqueEntryIds.map((entryId) => findEntry(workingDatabase, entryId))
+    if (entries.some((entry) => !entry?.parentGroup)) throw new VaultOpenError('WORKER_FAILURE', 'One or more selected entries no longer exist in the open vault.')
+    for (const entry of entries as KdbxEntry[]) workingDatabase.remove(entry)
+    const data = await workingDatabase.save()
+    return { database: workingDatabase, data, vault: mapKdbxSnapshot(workingDatabase, fileName) }
+  } catch (error) {
+    throw mapKdbxError(error)
+  }
+}
+
 export async function prepareKdbxEntriesPermanentDelete(database: Kdbx, entryIds: string[], fileName: string) {
   const uniqueEntryIds = [...new Set(entryIds)]
   if (!uniqueEntryIds.length) throw new VaultOpenError('WORKER_FAILURE', 'Select at least one entry to delete forever.')
@@ -624,6 +658,32 @@ export async function prepareKdbxEntryMove(database: Kdbx, entryId: string, grou
       vault: mapKdbxSnapshot(workingDatabase, fileName),
       entryId: entry.uuid.toString(),
     }
+  } catch (error) {
+    throw mapKdbxError(error)
+  }
+}
+
+export async function prepareKdbxEntriesMove(database: Kdbx, entryIds: string[], groupId: string, fileName: string) {
+  const uniqueEntryIds = [...new Set(entryIds)]
+  if (!uniqueEntryIds.length) throw new VaultOpenError('WORKER_FAILURE', 'Select at least one entry to move.')
+  try {
+    const clonedData = await database.save()
+    const workingDatabase = await Kdbx.load(clonedData, database.credentials)
+    const entries = uniqueEntryIds.map((entryId) => findEntry(workingDatabase, entryId))
+    const targetGroup = findGroup(workingDatabase, groupId)
+    const recycleBinId = workingDatabase.meta.recycleBinUuid?.toString() || ''
+    if (entries.some((entry) => !entry?.parentGroup)) throw new VaultOpenError('WORKER_FAILURE', 'One or more selected entries no longer exist in the open vault.')
+    if (!targetGroup) throw new VaultOpenError('WORKER_FAILURE', 'That destination folder no longer exists in the open vault.')
+    if (groupIsInRecycleBin(targetGroup, recycleBinId)) throw new VaultOpenError('WORKER_FAILURE', 'Entries cannot be moved into the Recycle Bin.')
+    for (const entry of entries as KdbxEntry[]) {
+      if (entry.parentGroup && groupIsInRecycleBin(entry.parentGroup, recycleBinId)) throw new VaultOpenError('WORKER_FAILURE', 'Restore Recycle Bin entries before moving them to another folder.')
+      if (entry.parentGroup?.uuid.toString() !== targetGroup.uuid.toString()) {
+        workingDatabase.move(entry, targetGroup)
+        entry.times.update()
+      }
+    }
+    const data = await workingDatabase.save()
+    return { database: workingDatabase, data, vault: mapKdbxSnapshot(workingDatabase, fileName) }
   } catch (error) {
     throw mapKdbxError(error)
   }

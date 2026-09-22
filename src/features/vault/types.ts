@@ -109,13 +109,17 @@ export type VaultWorkerRequest =
   | { type: 'create'; databaseName: string; fileName: string; password: string }
   | { type: 'get-entry'; entryId: string; requestId: string }
   | { type: 'export-entry-transfer'; entryId: string; requestId: string }
+  | { type: 'export-entries-transfer'; entryIds: string[]; requestId: string }
   | { type: 'get-protected-field'; entryId: string; fieldKey: string; requestId: string }
   | { type: 'prepare-entry-import'; entry: VaultTransferEntry; requestId: string }
+  | { type: 'prepare-entries-import'; entries: VaultTransferEntry[]; requestId: string }
   | { type: 'prepare-entry-save'; entry: VaultEntryDraft; requestId: string }
   | { type: 'prepare-entry-delete'; entryId: string; requestId: string }
+  | { type: 'prepare-entries-delete'; entryIds: string[]; requestId: string }
   | { type: 'prepare-entries-permanent-delete'; entryIds: string[]; requestId: string }
   | { type: 'prepare-entries-type-change'; entryIds: string[]; entryType: VaultEntryType; requestId: string }
   | { type: 'prepare-entry-move'; entryId: string; groupId: string; requestId: string }
+  | { type: 'prepare-entries-move'; entryIds: string[]; groupId: string; requestId: string }
   | { type: 'prepare-group-save'; group: VaultGroupDraft; requestId: string }
   | { type: 'prepare-group-delete'; groupId: string; requestId: string }
   | { type: 'prepare-vault-rename'; databaseName: string; fileName: string; requestId: string }
@@ -127,7 +131,17 @@ export type VaultWorkerResponse =
   | { type: 'created'; data: ArrayBuffer; fileName: string }
   | { type: 'entry'; entry: VaultEntryDetails; requestId: string }
   | { type: 'entry-transfer'; entry: VaultTransferEntry; requestId: string }
+  | { type: 'entries-transfer'; entries: VaultTransferEntry[]; requestId: string }
   | { type: 'protected-field'; value: string; requestId: string }
   | { type: 'change-prepared'; changeId: string; data: ArrayBuffer; entryId?: string; groupId?: string; requestId: string; vault: VaultSnapshot }
   | { type: 'change-finished'; requestId: string; vault: VaultSnapshot }
   | { type: 'error'; code: VaultOpenErrorCode; message: string; requestId?: string }
+
+export type VaultMoveDestination =
+  | { kind: 'folder'; id: string }
+  | { kind: 'vault'; id: string }
+
+export type OpenVaultMoveTarget = {
+  id: string
+  name: string
+}

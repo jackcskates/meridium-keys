@@ -2,7 +2,7 @@
 
 import { DOMParser as XmlDomParser, XMLSerializer as XmlSerializer } from '@xmldom/xmldom'
 import type { Kdbx } from 'kdbxweb'
-import { createKdbxData, exportKdbxEntryTransfer, loadKdbxDatabase, mapKdbxSnapshot, prepareKdbxEntriesPermanentDelete, prepareKdbxEntriesTypeChange, prepareKdbxEntryDelete, prepareKdbxEntryImport, prepareKdbxEntryMove, prepareKdbxEntrySave, prepareKdbxGroupDelete, prepareKdbxGroupSave, prepareKdbxVaultRename, readKdbxEntryDetails, readKdbxProtectedField, VaultOpenError } from './kdbx'
+import { createKdbxData, exportKdbxEntriesTransfer, exportKdbxEntryTransfer, loadKdbxDatabase, mapKdbxSnapshot, prepareKdbxEntriesDelete, prepareKdbxEntriesImport, prepareKdbxEntriesMove, prepareKdbxEntriesPermanentDelete, prepareKdbxEntriesTypeChange, prepareKdbxEntryDelete, prepareKdbxEntryImport, prepareKdbxEntryMove, prepareKdbxEntrySave, prepareKdbxGroupDelete, prepareKdbxGroupSave, prepareKdbxVaultRename, readKdbxEntryDetails, readKdbxProtectedField, VaultOpenError } from './kdbx'
 import type { VaultWorkerRequest, VaultWorkerResponse } from './types'
 
 const scope = self as DedicatedWorkerGlobalScope
@@ -60,6 +60,13 @@ scope.onmessage = async (event: MessageEvent<VaultWorkerRequest>) => {
       return
     }
 
+    if (event.data.type === 'export-entries-transfer') {
+      const entries = exportKdbxEntriesTransfer(database, event.data.entryIds)
+      const buffers = entries.flatMap((entry) => [...entry.attachments.map((attachment) => attachment.data), ...(entry.customIcon ? [entry.customIcon.data] : [])])
+      scope.postMessage({ type: 'entries-transfer', entries, requestId: event.data.requestId } satisfies VaultWorkerResponse, buffers)
+      return
+    }
+
     if (event.data.type === 'get-protected-field') {
       respond({ type: 'protected-field', value: readKdbxProtectedField(database, event.data.entryId, event.data.fieldKey), requestId: event.data.requestId })
       return
@@ -97,6 +104,15 @@ scope.onmessage = async (event: MessageEvent<VaultWorkerRequest>) => {
       return
     }
 
+    if (event.data.type === 'prepare-entries-import') {
+      if (pendingChange) throw new VaultOpenError('WORKER_FAILURE', 'Finish the current save before importing more entries.')
+      const prepared = await prepareKdbxEntriesImport(database, event.data.entries, fileName)
+      const changeId = crypto.randomUUID()
+      pendingChange = { id: changeId, database: prepared.database }
+      scope.postMessage({ type: 'change-prepared', changeId, data: prepared.data, requestId: event.data.requestId, vault: prepared.vault } satisfies VaultWorkerResponse, [prepared.data])
+      return
+    }
+
     if (event.data.type === 'prepare-entry-delete') {
       if (pendingChange) throw new VaultOpenError('WORKER_FAILURE', 'Finish the current save before deleting another entry.')
       const prepared = await prepareKdbxEntryDelete(database, event.data.entryId, fileName)
@@ -109,6 +125,15 @@ scope.onmessage = async (event: MessageEvent<VaultWorkerRequest>) => {
         requestId: event.data.requestId,
         vault: prepared.vault,
       } satisfies VaultWorkerResponse, [prepared.data])
+      return
+    }
+
+    if (event.data.type === 'prepare-entries-delete') {
+      if (pendingChange) throw new VaultOpenError('WORKER_FAILURE', 'Finish the current save before deleting more entries.')
+      const prepared = await prepareKdbxEntriesDelete(database, event.data.entryIds, fileName)
+      const changeId = crypto.randomUUID()
+      pendingChange = { id: changeId, database: prepared.database }
+      scope.postMessage({ type: 'change-prepared', changeId, data: prepared.data, requestId: event.data.requestId, vault: prepared.vault } satisfies VaultWorkerResponse, [prepared.data])
       return
     }
 
@@ -155,6 +180,15 @@ scope.onmessage = async (event: MessageEvent<VaultWorkerRequest>) => {
         requestId: event.data.requestId,
         vault: prepared.vault,
       } satisfies VaultWorkerResponse, [prepared.data])
+      return
+    }
+
+    if (event.data.type === 'prepare-entries-move') {
+      if (pendingChange) throw new VaultOpenError('WORKER_FAILURE', 'Finish the current save before moving more entries.')
+      const prepared = await prepareKdbxEntriesMove(database, event.data.entryIds, event.data.groupId, fileName)
+      const changeId = crypto.randomUUID()
+      pendingChange = { id: changeId, database: prepared.database }
+      scope.postMessage({ type: 'change-prepared', changeId, data: prepared.data, requestId: event.data.requestId, vault: prepared.vault } satisfies VaultWorkerResponse, [prepared.data])
       return
     }
 

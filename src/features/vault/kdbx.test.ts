@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DOMParser as XmlDomParser, XMLSerializer as XmlSerializer } from '@xmldom/xmldom'
 import { Consts, Credentials, Kdbx, KdbxBinaries, KdbxUuid, ProtectedValue } from 'kdbxweb'
-import { configureArgon2, createKdbxData, exportKdbxEntryTransfer, loadKdbxDatabase, prepareKdbxEntriesPermanentDelete, prepareKdbxEntriesTypeChange, prepareKdbxEntryDelete, prepareKdbxEntryImport, prepareKdbxEntryMove, prepareKdbxEntrySave, prepareKdbxGroupDelete, prepareKdbxGroupSave, prepareKdbxVaultRename, readKdbxEntryDetails, readKdbxProtectedField, readKdbxSnapshot, VaultOpenError } from './kdbx'
+import { configureArgon2, createKdbxData, exportKdbxEntriesTransfer, exportKdbxEntryTransfer, loadKdbxDatabase, prepareKdbxEntriesDelete, prepareKdbxEntriesImport, prepareKdbxEntriesMove, prepareKdbxEntriesPermanentDelete, prepareKdbxEntriesTypeChange, prepareKdbxEntryDelete, prepareKdbxEntryImport, prepareKdbxEntryMove, prepareKdbxEntrySave, prepareKdbxGroupDelete, prepareKdbxGroupSave, prepareKdbxVaultRename, readKdbxEntryDetails, readKdbxProtectedField, readKdbxSnapshot, VaultOpenError } from './kdbx'
 import { changeEntryDraftType, createEmptyEntryDraft, entryTypeDefinitions } from './entryTypes'
 
 // kdbxweb uses browser-native XML APIs in production. Supply the current,
@@ -263,6 +263,49 @@ describe('readKdbxSnapshot', () => {
     expect(importedEntry?.autoType.defaultSequence).toBe('{USERNAME}{TAB}{PASSWORD}{ENTER}')
     expect(importedEntry?.customData?.get('migration-label')?.value).toBe('legacy import')
     expect([...new Uint8Array(importedIcon?.data || new ArrayBuffer(0))]).toEqual([1, 2, 3, 4])
+  })
+
+  it('moves, transfers, and recycles a selected batch in one encrypted change per vault', async () => {
+    const sourceData = await createKdbxData('Batch Source', fixturePassword)
+    let source = await loadKdbxDatabase(sourceData, fixturePassword)
+    const rootGroupId = source.getDefaultGroup().uuid.toString()
+    const first = await prepareKdbxEntrySave(source, {
+      groupId: rootGroupId,
+      type: 'password',
+      title: 'Batch Password',
+      fields: { password: 'batch-password-secret', url: 'https://one.example.test' },
+    }, 'batch-source.kdbx')
+    source = first.database
+    const second = await prepareKdbxEntrySave(source, {
+      groupId: rootGroupId,
+      type: 'note',
+      title: 'Batch Note',
+      fields: { notes: 'move this note too' },
+    }, 'batch-source.kdbx')
+    const folder = await prepareKdbxGroupSave(second.database, { parentGroupId: rootGroupId, name: 'Migrating' }, 'batch-source.kdbx')
+    const entryIds = [first.entryId, second.entryId]
+
+    const moved = await prepareKdbxEntriesMove(folder.database, entryIds, folder.groupId, 'batch-source.kdbx')
+    expect(moved.vault.entries.filter((entry) => entryIds.includes(entry.id))).toEqual(expect.arrayContaining([
+      expect.objectContaining({ title: 'Batch Password', groupId: folder.groupId }),
+      expect.objectContaining({ title: 'Batch Note', groupId: folder.groupId }),
+    ]))
+
+    const transfers = exportKdbxEntriesTransfer(moved.database, entryIds)
+    const destinationData = await createKdbxData('Batch Destination', fixturePassword)
+    const destination = await loadKdbxDatabase(destinationData, fixturePassword)
+    const imported = await prepareKdbxEntriesImport(destination, transfers, 'batch-destination.kdbx')
+    const importedSnapshot = await readKdbxSnapshot(imported.data, fixturePassword, 'batch-destination.kdbx')
+    expect(importedSnapshot.entries).toEqual(expect.arrayContaining([
+      expect.objectContaining({ title: 'Batch Password', groupId: importedSnapshot.rootGroupId }),
+      expect.objectContaining({ title: 'Batch Note', groupId: importedSnapshot.rootGroupId }),
+    ]))
+
+    const recycled = await prepareKdbxEntriesDelete(moved.database, entryIds, 'batch-source.kdbx')
+    expect(recycled.vault.entries.filter((entry) => entryIds.includes(entry.id))).toEqual(expect.arrayContaining([
+      expect.objectContaining({ title: 'Batch Password', isDeleted: true }),
+      expect.objectContaining({ title: 'Batch Note', isDeleted: true }),
+    ]))
   })
 
   it('decrypts only a requested protected field for direct copy', async () => {

@@ -73,6 +73,12 @@ export class UnlockedVaultSession {
     return message.entry
   }
 
+  async exportEntriesTransfer(entryIds: string[]): Promise<VaultTransferEntry[]> {
+    const message = await this.request((requestId) => ({ type: 'export-entries-transfer', entryIds, requestId }))
+    if (message.type !== 'entries-transfer') throw new VaultOpenError('WORKER_FAILURE', 'The secure vault worker returned an unexpected bulk transfer response.')
+    return message.entries
+  }
+
   async getProtectedField(entryId: string, fieldKey: string) {
     const message = await this.request((requestId) => ({ type: 'get-protected-field', entryId, fieldKey, requestId }))
     if (message.type !== 'protected-field') throw new VaultOpenError('WORKER_FAILURE', 'The secure vault worker returned an unexpected protected field response.')
@@ -91,9 +97,21 @@ export class UnlockedVaultSession {
     return { changeId: message.changeId, data: message.data, entryId: message.entryId, vault: message.vault }
   }
 
+  async prepareEntriesImport(entries: VaultTransferEntry[]): Promise<PreparedVaultChange> {
+    const message = await this.request((requestId) => ({ type: 'prepare-entries-import', entries, requestId }))
+    if (message.type !== 'change-prepared') throw new VaultOpenError('WORKER_FAILURE', 'The secure vault worker returned an unexpected bulk import response.')
+    return { changeId: message.changeId, data: message.data, vault: message.vault }
+  }
+
   async prepareEntryDelete(entryId: string): Promise<PreparedVaultChange> {
     const message = await this.request((requestId) => ({ type: 'prepare-entry-delete', entryId, requestId }))
     if (message.type !== 'change-prepared') throw new VaultOpenError('WORKER_FAILURE', 'The secure vault worker returned an unexpected delete response.')
+    return { changeId: message.changeId, data: message.data, vault: message.vault }
+  }
+
+  async prepareEntriesDelete(entryIds: string[]): Promise<PreparedVaultChange> {
+    const message = await this.request((requestId) => ({ type: 'prepare-entries-delete', entryIds, requestId }))
+    if (message.type !== 'change-prepared') throw new VaultOpenError('WORKER_FAILURE', 'The secure vault worker returned an unexpected bulk delete response.')
     return { changeId: message.changeId, data: message.data, vault: message.vault }
   }
 
@@ -113,6 +131,12 @@ export class UnlockedVaultSession {
     const message = await this.request((requestId) => ({ type: 'prepare-entry-move', entryId, groupId, requestId }))
     if (message.type !== 'change-prepared') throw new VaultOpenError('WORKER_FAILURE', 'The secure vault worker returned an unexpected move response.')
     return { changeId: message.changeId, data: message.data, entryId: message.entryId, vault: message.vault }
+  }
+
+  async prepareEntriesMove(entryIds: string[], groupId: string): Promise<PreparedVaultChange> {
+    const message = await this.request((requestId) => ({ type: 'prepare-entries-move', entryIds, groupId, requestId }))
+    if (message.type !== 'change-prepared') throw new VaultOpenError('WORKER_FAILURE', 'The secure vault worker returned an unexpected bulk move response.')
+    return { changeId: message.changeId, data: message.data, vault: message.vault }
   }
 
   async prepareGroupSave(group: VaultGroupDraft): Promise<PreparedVaultChange> {

@@ -36,6 +36,9 @@ future possibilities.
 - Delete entries into the standard KDBX Recycle Bin.
 - Select any number of entries in the current folder and permanently delete them
   in one encrypted, revision-safe save after an explicit irreversible warning.
+- Move a filtered selection to another folder in one encrypted save, or move the
+  batch to the root of another open vault. Cross-vault batches save the
+  destination first and recycle the source entries only after that succeeds.
 - Rename an unlocked Dropbox vault by updating both its internal KDBX database
   name and its encrypted Dropbox filename without allowing a conflicting copy.
 - Drag entries between real folders or “No folder” with mouse or touch, with a
@@ -79,7 +82,8 @@ future possibilities.
   entry name, visible subtitle, or type label. The filter clears when changing
   folders and never creates a persistent plaintext index. In selection mode, a
   checkbox aligned above the entry checkbox column selects or clears every
-  filtered result for bulk actions; changing the query clears the selection.
+  filtered result for bulk move, type-change, or deletion actions; changing the
+  query clears the selection.
 
 **Proposed:**
 

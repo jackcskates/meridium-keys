@@ -422,6 +422,10 @@ they never existed; mark them superseded and link to the replacement.
   the source entry to its Recycle Bin. If source removal fails, retain both
   copies and report the recoverable result. App Lock and sign-out terminate all
   open workers.
+- **Bulk migration extension:** Filtered selections use the same destination-
+  first rule. A same-vault folder move is one encrypted change; a cross-vault
+  batch is one destination import followed by one source Recycle Bin change,
+  rather than one Dropbox revision per entry.
 - **Reason:** Migration from a large imported 1Password vault is an occasional
   gardening task. Temporary independent sessions provide a direct drag workflow
   without normalizing the product around permanently open decrypted vaults or

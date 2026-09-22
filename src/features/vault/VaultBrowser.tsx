@@ -5,7 +5,7 @@ import { copyProtectedText } from './copyProtectedText'
 import { EntryTypeIcon } from './EntryTypeIcon'
 import { changeEntryDraftType, createEmptyEntryDraft, entryMatchesKeyword, entryTypeConflicts, entryTypeDefinitions, entryTypeLabel, getEntryTypeDefinition, missingRequiredEntryFields, type EntryFieldDefinition } from './entryTypes'
 import { generateServicePassword, generatedPasswordLength } from './passwordGenerator'
-import type { VaultEntryDetails, VaultEntryDraft, VaultEntrySummary, VaultEntryType, VaultGroupDraft, VaultGroupSummary, VaultSnapshot } from './types'
+import type { OpenVaultMoveTarget, VaultEntryDetails, VaultEntryDraft, VaultEntrySummary, VaultEntryType, VaultGroupDraft, VaultGroupSummary, VaultMoveDestination, VaultSnapshot } from './types'
 
 type VaultBrowserProps = {
   vault: VaultSnapshot
@@ -19,6 +19,8 @@ type VaultBrowserProps = {
   onReadProtectedField: (entryId: string, fieldKey: string) => Promise<string>
   onLock: () => void
   onMoveEntry: (entryId: string, groupId: string) => Promise<{ entryId: string; vault: VaultSnapshot }>
+  onMoveEntries: (entryIds: string[], destination: VaultMoveDestination) => Promise<VaultSnapshot>
+  openVaultMoveTargets: OpenVaultMoveTarget[]
   onEntryDragStart?: (entry: VaultEntrySummary) => void
   onEntryDragEnd?: () => void
   onDropEntryOnVault?: (entryId: string, vaultId: string) => void
@@ -253,7 +255,42 @@ function MoveEntryDialog({ entry, vault, isMoving, error, onCancel, onMove }: {
   </form></DialogShell>
 }
 
-export function VaultBrowser({ vault, vaultId, canEdit, onChangeEntriesType, onDeleteEntry, onDeleteEntriesForever, onDeleteGroup, onEntryDragEnd, onEntryDragStart, onLoadEntry, onLock, onMoveEntry, onDropEntryOnVault, onReadProtectedField, onRenameVault, onSaveEntry, onSaveGroup, onVaultDropTargetChange }: VaultBrowserProps) {
+function MoveEntriesDialog({ entries, vault, openVaultTargets, isMoving, error, onCancel, onMove }: {
+  entries: VaultEntrySummary[]
+  vault: VaultSnapshot
+  openVaultTargets: OpenVaultMoveTarget[]
+  isMoving: boolean
+  error: string
+  onCancel: () => void
+  onMove: (destination: VaultMoveDestination) => void
+}) {
+  const sourceGroupId = entries[0]?.groupId || vault.rootGroupId
+  const folderTargets = [
+    ...(sourceGroupId !== vault.rootGroupId ? [{ id: vault.rootGroupId, name: 'No folder' }] : []),
+    ...vault.groups.filter((group) => !group.isRecycleBin && group.id !== sourceGroupId).map((group) => ({ id: group.id, name: group.path })),
+  ]
+  const firstDestination = folderTargets[0] ? `folder:${folderTargets[0].id}` : openVaultTargets[0] ? `vault:${openVaultTargets[0].id}` : ''
+  const [destination, setDestination] = useState(firstDestination)
+  const count = entries.length
+
+  function submit() {
+    const separator = destination.indexOf(':')
+    if (separator < 0) return
+    const kind = destination.slice(0, separator)
+    const id = destination.slice(separator + 1)
+    if ((kind === 'folder' || kind === 'vault') && id) onMove({ kind, id })
+  }
+
+  return <DialogShell describedBy="move-entries-description" labelledBy="move-entries-title" locked={isMoving} onCancel={onCancel}><form className="confirm-dialog-card" onSubmit={(event) => { event.preventDefault(); submit() }}>
+    <span className="confirm-dialog-icon is-neutral"><FolderInput aria-hidden="true" size={24} /></span>
+    <div className="confirm-dialog-copy"><p className="eyebrow">Bulk move</p><h2 id="move-entries-title">Move {count} {count === 1 ? 'entry' : 'entries'}</h2><p id="move-entries-description">Move them to a folder in this vault, or to the root of another open vault. Cross-vault moves save the destination before placing the originals in the source Recycle Bin.</p></div>
+    {firstDestination ? <label className="field"><span>Destination</span><select autoFocus disabled={isMoving} onChange={(event) => setDestination(event.target.value)} value={destination}>{folderTargets.length > 0 && <optgroup label="This vault">{folderTargets.map((target) => <option key={target.id} value={`folder:${target.id}`}>{target.name}</option>)}</optgroup>}{openVaultTargets.length > 0 && <optgroup label="Open vaults">{openVaultTargets.map((target) => <option key={target.id} value={`vault:${target.id}`}>{target.name} — root</option>)}</optgroup>}</select></label> : <p className="unlock-error" role="alert">Create another folder or open another vault before moving this selection.</p>}
+    {error && <p className="unlock-error" role="alert">{error}</p>}
+    <div className="confirm-dialog-actions"><button className="button button-secondary" disabled={isMoving} onClick={onCancel} type="button">Cancel</button><button className="button button-primary" disabled={isMoving || !destination} type="submit">{isMoving ? 'Moving…' : `Move ${count}`}</button></div>
+  </form></DialogShell>
+}
+
+export function VaultBrowser({ vault, vaultId, canEdit, onChangeEntriesType, onDeleteEntry, onDeleteEntriesForever, onDeleteGroup, onEntryDragEnd, onEntryDragStart, onLoadEntry, onLock, onMoveEntry, onMoveEntries, onDropEntryOnVault, onReadProtectedField, onRenameVault, onSaveEntry, onSaveGroup, onVaultDropTargetChange, openVaultMoveTargets }: VaultBrowserProps) {
   const activeEntries = useMemo(() => vault.entries.filter((entry) => !entry.isDeleted), [vault.entries])
   const unfiledEntries = useMemo(() => activeEntries.filter((entry) => entry.groupId === vault.rootGroupId), [activeEntries, vault.rootGroupId])
   const activeGroups = useMemo(() => vault.groups.filter((group) => !group.isRecycleBin), [vault.groups])
@@ -287,6 +324,7 @@ export function VaultBrowser({ vault, vaultId, canEdit, onChangeEntriesType, onD
   }, [selectedEntryIds, visibleEntries])
   const allVisibleEntriesSelected = visibleEntries.length > 0 && selectedVisibleEntryIds.size === visibleEntries.length
   const [entriesToDeleteForever, setEntriesToDeleteForever] = useState<VaultEntrySummary[]>([])
+  const [entriesToMove, setEntriesToMove] = useState<VaultEntrySummary[]>([])
   const [entriesToRetype, setEntriesToRetype] = useState<VaultEntrySummary[]>([])
   const [entryToRetype, setEntryToRetype] = useState<VaultEntryDetails | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
@@ -306,7 +344,9 @@ export function VaultBrowser({ vault, vaultId, canEdit, onChangeEntriesType, onD
   const [dropTargetGroupId, setDropTargetGroupId] = useState('')
   const [entryToMove, setEntryToMove] = useState<VaultEntrySummary | null>(null)
   const [isMovingEntry, setIsMovingEntry] = useState(false)
+  const [isMovingEntries, setIsMovingEntries] = useState(false)
   const [moveError, setMoveError] = useState('')
+  const [bulkMoveError, setBulkMoveError] = useState('')
   const [moveStatus, setMoveStatus] = useState('')
   const [copyState, setCopyState] = useState<{ entryId: string; fieldKey: string; status: 'copying' | 'copied' | 'error'; message: string } | null>(null)
   const [revealState, setRevealState] = useState<{ entryId: string; fieldKey: string; status: 'loading' | 'revealed' | 'error'; value: string; message: string } | null>(null)
@@ -621,6 +661,27 @@ export function VaultBrowser({ vault, vaultId, canEdit, onChangeEntriesType, onD
     }
   }
 
+  async function moveEntries(destination: VaultMoveDestination) {
+    if (!entriesToMove.length) return
+    const entryIds = entriesToMove.map((entry) => entry.id)
+    setIsMovingEntries(true)
+    setBulkMoveError('')
+    try {
+      await onMoveEntries(entryIds, destination)
+      setEntriesToMove([])
+      stopSelecting()
+      resetEntryEditor()
+      if (destination.kind === 'folder') {
+        setSelectedGroupId(destination.id)
+        setSelectedEntryId(entryIds[0] || '')
+      }
+    } catch (error) {
+      setBulkMoveError(error instanceof Error ? error.message : 'The selected entries could not be moved safely.')
+    } finally {
+      setIsMovingEntries(false)
+    }
+  }
+
   async function beginEntryTypeChange(entry: VaultEntrySummary) {
     hideRevealedField()
     setIsLoadingTypeChange(true)
@@ -913,6 +974,7 @@ export function VaultBrowser({ vault, vaultId, canEdit, onChangeEntriesType, onD
         {moveStatus && <p aria-live="polite" className="visually-hidden">{moveStatus}</p>}
         <div className={`panel-heading entry-panel-heading ${selectionMode ? 'is-selecting' : ''}`}><span className="entry-panel-title"><h2>Keys</h2>{selectionMode && <small aria-live="polite">{selectedVisibleEntryIds.size} selected</small>}</span><span className="entry-selection-actions">
           {selectionMode ? <>
+              <button aria-label="Move selected entries" className="panel-action" disabled={!selectedVisibleEntryIds.size || isDeleting || isMovingEntries || visibleEntries.some((entry) => selectedVisibleEntryIds.has(entry.id) && entry.isDeleted)} onClick={() => { setBulkMoveError(''); setEntriesToMove(visibleEntries.filter((entry) => selectedVisibleEntryIds.has(entry.id))) }} title="Move selected" type="button"><FolderInput aria-hidden="true" size={18} /></button>
               <button aria-label="Change selected entry types" className="panel-action" disabled={!selectedVisibleEntryIds.size || isDeleting || isChangingType} onClick={() => { setTypeChangeError(''); setEntriesToRetype(visibleEntries.filter((entry) => selectedVisibleEntryIds.has(entry.id))) }} title="Change entry type" type="button"><Tags aria-hidden="true" size={18} /></button>
               <button aria-label="Delete selected entries forever" className="panel-action is-danger" disabled={!selectedVisibleEntryIds.size || isDeleting} onClick={() => { setDeleteError(''); setEntriesToDeleteForever(visibleEntries.filter((entry) => selectedVisibleEntryIds.has(entry.id))) }} title="Delete selected forever" type="button"><Trash2 aria-hidden="true" size={18} /></button>
               <button aria-label="Stop selecting entries" className="panel-action" disabled={isDeleting} onClick={stopSelecting} title="Done selecting" type="button"><X aria-hidden="true" size={18} /></button>
@@ -963,7 +1025,7 @@ export function VaultBrowser({ vault, vaultId, canEdit, onChangeEntriesType, onD
         title="Resize Keys and detail. Use arrow keys or drag; double-click to reset."
       />
       <section className="entry-detail" aria-label="Selected entry">
-        {selectionMode ? <div className="bulk-selection-summary"><span className="entry-glyph entry-glyph-large"><ListChecks aria-hidden="true" size={21} /></span><div><p className="eyebrow">Bulk selection</p><h2>{selectedVisibleEntryIds.size ? `${selectedVisibleEntryIds.size} selected` : 'Choose entries'}</h2><p>Select entries from this folder, then use the trash icon to delete them permanently.</p></div></div> : choosingType ? <div className="entry-type-picker"><div className="entry-editor-heading"><div><p className="eyebrow">New entry</p><h2>Choose a type</h2></div></div><p className="type-picker-copy">The type controls which fields appear in the entry.</p><div className="entry-type-grid">{entryTypeDefinitions.map((type) => <button key={type.id} onClick={() => chooseType(type.id)} type="button"><span className="entry-glyph"><EntryTypeIcon type={type.id} /></span><span><strong>{type.label}</strong><small>{type.description}</small></span></button>)}</div><button className="text-button" onClick={resetEntryEditor} type="button">Cancel</button></div> : draft && definition ? <form autoComplete="off" className="entry-editor" onSubmit={saveEntry}>
+        {selectionMode ? <div className="bulk-selection-summary"><span className="entry-glyph entry-glyph-large"><ListChecks aria-hidden="true" size={21} /></span><div><p className="eyebrow">Bulk selection</p><h2>{selectedVisibleEntryIds.size ? `${selectedVisibleEntryIds.size} selected` : 'Choose entries'}</h2><p>Select filtered entries, then move them, change their type, or delete them permanently.</p></div></div> : choosingType ? <div className="entry-type-picker"><div className="entry-editor-heading"><div><p className="eyebrow">New entry</p><h2>Choose a type</h2></div></div><p className="type-picker-copy">The type controls which fields appear in the entry.</p><div className="entry-type-grid">{entryTypeDefinitions.map((type) => <button key={type.id} onClick={() => chooseType(type.id)} type="button"><span className="entry-glyph"><EntryTypeIcon type={type.id} /></span><span><strong>{type.label}</strong><small>{type.description}</small></span></button>)}</div><button className="text-button" onClick={resetEntryEditor} type="button">Cancel</button></div> : draft && definition ? <form autoComplete="off" className="entry-editor" onSubmit={saveEntry}>
           <div className="entry-editor-heading"><div><p className="eyebrow">{draft.id ? `Edit ${definition.label}` : `New ${definition.label}`}</p><h2>{draft.id ? draft.title || `Untitled ${definition.label}` : `Add ${definition.label}`}</h2></div>{!draft.id && <button className="text-button" onClick={() => { setDraft(null); setChoosingType(true) }} type="button">Change type</button>}</div>
           <label className="field"><span>Name</span><input autoFocus autoComplete="off" disabled={isSaving} onChange={(event) => setDraft({ ...draft, title: event.target.value })} required value={draft.title} /></label>
           <label className="field"><span>Folder</span><select disabled={isSaving} onChange={(event) => setDraft({ ...draft, groupId: event.target.value })} value={draft.groupId}><option value={vault.rootGroupId}>No folder</option>{vault.groups.filter((group) => !group.isRecycleBin).map((group) => <option key={group.id} value={group.id}>{group.path}</option>)}</select></label>
@@ -982,6 +1044,7 @@ export function VaultBrowser({ vault, vaultId, canEdit, onChangeEntriesType, onD
     </div>
     {entryToDelete && <DeleteEntryDialog entry={entryToDelete} error={deleteError} isDeleting={isDeleting} onCancel={() => { if (!isDeleting) { setDeleteError(''); setEntryToDelete(null) } }} onDelete={() => void deleteEntry()} />}
     {entriesToDeleteForever.length > 0 && <DeleteEntriesForeverDialog entries={entriesToDeleteForever} error={deleteError} isDeleting={isDeleting} onCancel={() => { if (!isDeleting) { setDeleteError(''); setEntriesToDeleteForever([]) } }} onDelete={() => void deleteEntriesForever()} />}
+    {entriesToMove.length > 0 && <MoveEntriesDialog entries={entriesToMove} error={bulkMoveError} isMoving={isMovingEntries} onCancel={() => { if (!isMovingEntries) { setBulkMoveError(''); setEntriesToMove([]) } }} onMove={(destination) => void moveEntries(destination)} openVaultTargets={openVaultMoveTargets} vault={vault} />}
     {entriesToRetype.length > 0 && <ChangeEntriesTypeDialog entries={entriesToRetype} error={typeChangeError} isSaving={isChangingType} onCancel={() => { if (!isChangingType) { setTypeChangeError(''); setEntriesToRetype([]) } }} onSave={(type) => void changeEntriesType(type)} />}
     {entryToRetype && <ChangeEntryTypeDialog entry={entryToRetype} error={typeChangeError} isSaving={isChangingType} onCancel={() => { if (!isChangingType) { setTypeChangeError(''); setEntryToRetype(null) } }} onSave={(draft) => void changeEntryType(draft)} />}
     {entryToMove && <MoveEntryDialog entry={entryToMove} error={moveError} isMoving={isMovingEntry} onCancel={() => { if (!isMovingEntry) { setMoveError(''); setEntryToMove(null) } }} onMove={(groupId) => void moveEntry(entryToMove.id, groupId)} vault={vault} />}

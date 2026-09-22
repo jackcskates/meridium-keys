@@ -116,6 +116,10 @@ Last verified: 2026-09-22.
   one encrypted save. Permanent deletion bypasses the KDBX Recycle Bin, records
   KDBX deletion tombstones, cleans unused binary attachments, and requires an
   explicit irreversible confirmation.
+- Move a filtered selection to “No folder” or another folder in one encrypted
+  revision-safe save. The same bulk action can move the selection to the root
+  of another open vault using one destination import followed by one source
+  Recycle Bin save; if source removal fails, both encrypted copies remain safe.
 - Rename an unlocked Dropbox vault from the working surface. Rename updates the
   standard KDBX database name and the encrypted Dropbox filename, rejects a
   conflicting filename, and never decrypts or transmits entry fields.

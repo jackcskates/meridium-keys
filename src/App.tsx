@@ -9,7 +9,7 @@ import { entryDragMime, VaultBrowser } from './features/vault/VaultBrowser'
 import { createVaultFile, toVaultFileName, type CreateVaultStage } from './features/vault/createVault'
 import { VaultOpenError } from './features/vault/kdbx'
 import { vaultPasswordRequirements } from './features/vault/passwordPolicy'
-import type { VaultEntryDraft, VaultEntrySummary, VaultEntryType, VaultGroupDraft, VaultSnapshot } from './features/vault/types'
+import type { VaultEntryDraft, VaultEntrySummary, VaultEntryType, VaultGroupDraft, VaultMoveDestination, VaultSnapshot } from './features/vault/types'
 import { openVaultSession, type PreparedVaultChange, type UnlockedVaultSession, type UnlockStage } from './features/vault/unlockVault'
 import './App.css'
 
@@ -806,6 +806,38 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
     return { entryId: prepared.entryId || entryId, vault: committedVault }
   }
 
+  async function moveVaultEntries(entryIds: string[], destination: VaultMoveDestination) {
+    const sourceVaultId = activeDropboxVaultId
+    const source = sourceVaultId ? openDropboxVaultsRef.current.get(sourceVaultId) : undefined
+    if (!source) throw new Error('The source vault is locked. Open it again before moving entries.')
+
+    if (destination.kind === 'folder') {
+      return persistOpenDropboxVaultChange(sourceVaultId, await source.session.prepareEntriesMove(entryIds, destination.id))
+    }
+
+    const target = openDropboxVaultsRef.current.get(destination.id)
+    if (!target || destination.id === sourceVaultId) throw new Error('Open a different destination vault before moving entries.')
+
+    let destinationSaved = false
+    try {
+      const transfers = await source.session.exportEntriesTransfer(entryIds)
+      const imported = await target.session.prepareEntriesImport(transfers)
+      await persistOpenDropboxVaultChange(destination.id, imported)
+      destinationSaved = true
+
+      const deleted = await source.session.prepareEntriesDelete(entryIds)
+      await persistOpenDropboxVaultChange(sourceVaultId, deleted)
+      activateOpenDropboxVault(destination.id)
+      return openDropboxVaultsRef.current.get(destination.id)?.snapshot || imported.vault
+    } catch (error) {
+      if (destinationSaved) {
+        const targetName = target.remoteVault.name.replace(/\.kdbx$/i, '')
+        throw new Error(`${entryIds.length} ${entryIds.length === 1 ? 'entry was' : 'entries were'} copied to ${targetName}, but the originals could not be moved to the source Recycle Bin. They remain safely in both vaults.`)
+      }
+      throw error
+    }
+  }
+
   async function saveVaultGroup(group: VaultGroupDraft) {
     const session = vaultSessionRef.current
     if (!session) throw new Error('The vault is locked. Open it again before saving a folder.')
@@ -1167,11 +1199,13 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
               }}
               onLock={lockVault}
               onMoveEntry={moveVaultEntry}
+              onMoveEntries={moveVaultEntries}
               onDropEntryOnVault={(entryId, targetVaultId) => queueVaultTransfer(entryId, targetVaultId, activeDropboxVaultId)}
               onRenameVault={renameOpenVault}
               onSaveGroup={saveVaultGroup}
               onSaveEntry={saveVaultEntry}
               onVaultDropTargetChange={setVaultDropTargetId}
+              openVaultMoveTargets={dropbox.vaults.flatMap((remoteVault) => remoteVault.id !== activeDropboxVaultId && openDropboxVaultSnapshots[remoteVault.id] ? [{ id: remoteVault.id, name: remoteVault.name.replace(/\.kdbx$/i, '') }] : [])}
               vault={vaultSnapshot}
               vaultId={activeDropboxVaultId || undefined}
             />
