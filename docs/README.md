@@ -23,6 +23,8 @@ are deliberately separated so assumptions do not quietly become product rules.
 - [Decision log](decision-log.md) - decisions, open questions, and their status.
 - [Implementation status](implementation-status.md) - what currently works,
   verified boundaries, and the next safe slice.
+- [Daily-driver audit (2026-09-22)](daily-driver-audit-2026-09-22.md) - fixes,
+  test evidence, and remaining reliability and security gaps.
 
 ## Documentation rules
 

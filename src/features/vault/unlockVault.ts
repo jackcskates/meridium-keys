@@ -53,8 +53,7 @@ export class UnlockedVaultSession {
     const requestId = crypto.randomUUID()
     return new Promise<VaultWorkerResponse>((resolve, reject) => {
       const timeout = window.setTimeout(() => {
-        this.pending.delete(requestId)
-        reject(new VaultOpenError('WORKER_FAILURE', 'The vault operation took too long and was stopped safely.'))
+        this.failAll('The vault operation took too long and was stopped safely.')
       }, 120_000)
       this.pending.set(requestId, { resolve, reject, timeout })
       this.worker.postMessage(createRequest(requestId))

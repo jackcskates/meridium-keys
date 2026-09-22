@@ -3,23 +3,25 @@ import { deleteDropboxVault, downloadDropboxVault, listDropboxVaults, loadDropbo
 import { forgetDropboxRefreshToken, loadDropboxRefreshToken, rememberDropboxRefreshToken } from './credentialStore'
 import { beginDropboxAuthorization, completeDropboxAuthorization, DropboxAuthError, refreshDropboxAuthorization } from './oauth'
 import type { DropboxConnectionStatus, DropboxSession, DropboxVaultFile } from './types'
+import { removeVault, upsertVault } from './vaultLibrary'
+import { sessionNeedsRefresh } from './sessionExpiry'
 
 export function useDropbox() {
-  const [status, setStatus] = useState<DropboxConnectionStatus>(() => {
-    const query = new URLSearchParams(window.location.search)
-    return query.has('code') || query.has('error') ? 'connecting' : 'disconnected'
-  })
+  const [status, setStatus] = useState<DropboxConnectionStatus>('connecting')
   const [session, setSession] = useState<DropboxSession | null>(null)
   const [vaults, setVaults] = useState<DropboxVaultFile[]>([])
   const [error, setError] = useState('')
-  const callbackStarted = useRef(false)
+  const libraryRequestRef = useRef(0)
+  const connectionEpochRef = useRef(0)
+  const refreshPromiseRef = useRef<Promise<DropboxSession> | null>(null)
 
   const loadLibrary = useCallback(async (activeSession: DropboxSession) => {
+    const requestId = ++libraryRequestRef.current
     setStatus('loading')
     setError('')
     try {
       let usableSession = activeSession
-      if (activeSession.refreshToken && activeSession.expiresAt - Date.now() < 60_000) {
+      if (sessionNeedsRefresh(activeSession)) {
         usableSession = await refreshDropboxAuthorization(activeSession.refreshToken)
       }
       let accountName: string
@@ -37,35 +39,39 @@ export function useDropbox() {
           listDropboxVaults(usableSession),
         ])
       }
+      if (requestId !== libraryRequestRef.current) return
       if (usableSession.refreshToken) void rememberDropboxRefreshToken(usableSession.refreshToken).catch(() => undefined)
       setSession({ ...usableSession, accountName })
       setVaults(remoteVaults)
       setStatus('connected')
     } catch (loadError) {
+      if (requestId !== libraryRequestRef.current) return
       setError(loadError instanceof Error ? loadError.message : 'Dropbox could not load the vault library.')
       setStatus('error')
     }
   }, [])
 
   useEffect(() => {
-    if (callbackStarted.current) return
-    callbackStarted.current = true
+    let active = true
     void completeDropboxAuthorization()
       .then(async (connectedSession) => {
+        if (!active) return
         if (connectedSession) {
-          if (connectedSession.refreshToken) void rememberDropboxRefreshToken(connectedSession.refreshToken).catch(() => undefined)
           await loadLibrary(connectedSession)
           return
         }
         const refreshToken = await loadDropboxRefreshToken().catch(() => null)
-        if (!refreshToken) return
+        if (!active) return
+        if (!refreshToken) { setStatus('disconnected'); return }
         setStatus('connecting')
         await loadLibrary(await refreshDropboxAuthorization(refreshToken))
       })
       .catch((authError) => {
+        if (!active) return
         setError(authError instanceof DropboxAuthError ? authError.message : 'Dropbox could not connect securely.')
         setStatus('error')
       })
+    return () => { active = false; libraryRequestRef.current += 1; connectionEpochRef.current += 1 }
   }, [loadLibrary])
 
   useEffect(() => {
@@ -98,49 +104,65 @@ export function useDropbox() {
     if (session) await loadLibrary(session)
   }
 
+  async function sessionForRequest() {
+    if (!session) throw new Error('Connect Dropbox before working with a vault.')
+    if (!sessionNeedsRefresh(session)) return session
+    const epoch = connectionEpochRef.current
+    refreshPromiseRef.current ??= refreshDropboxAuthorization(session.refreshToken)
+    try {
+      const refreshed = await refreshPromiseRef.current
+      if (epoch !== connectionEpochRef.current) throw new Error('The Dropbox connection changed. Reconnect before continuing.')
+      const current = { ...refreshed, accountName: session.accountName }
+      setSession(current)
+      if (current.refreshToken) void rememberDropboxRefreshToken(current.refreshToken).catch(() => undefined)
+      return current
+    } finally {
+      refreshPromiseRef.current = null
+    }
+  }
+
   async function download(vault: DropboxVaultFile) {
-    if (!session) throw new Error('Connect Dropbox before opening this vault.')
-    return downloadDropboxVault(session, vault)
+    return downloadDropboxVault(await sessionForRequest(), vault)
   }
 
   async function upload(file: File) {
-    if (!session) throw new Error('Connect Dropbox before creating a vault.')
-    try {
-      const vault = await uploadNewDropboxVault(session, file)
-      await loadLibrary(session)
-      return vault
-    } catch (uploadError) {
-      await loadLibrary(session)
-      throw uploadError
-    }
+    const vault = await uploadNewDropboxVault(await sessionForRequest(), file)
+    libraryRequestRef.current += 1
+    setVaults((current) => upsertVault(current, vault))
+    setStatus('connected')
+    setError('')
+    return vault
   }
 
   async function remove(vault: DropboxVaultFile) {
-    if (!session) throw new Error('Connect Dropbox before deleting this vault.')
-    try {
-      await deleteDropboxVault(session, vault)
-      await loadLibrary(session)
-    } catch (deleteError) {
-      await loadLibrary(session)
-      throw deleteError
-    }
+    await deleteDropboxVault(await sessionForRequest(), vault)
+    libraryRequestRef.current += 1
+    setVaults((current) => removeVault(current, vault.id))
+    setStatus('connected')
+    setError('')
   }
 
   async function save(vault: DropboxVaultFile, file: File) {
-    if (!session) throw new Error('Connect Dropbox before saving this vault.')
-    const updated = await uploadDropboxVaultRevision(session, vault, file)
-    await loadLibrary(session)
+    const updated = await uploadDropboxVaultRevision(await sessionForRequest(), vault, file)
+    libraryRequestRef.current += 1
+    setVaults((current) => upsertVault(current, updated))
+    setStatus('connected')
+    setError('')
     return updated
   }
 
   async function rename(vault: DropboxVaultFile, fileName: string) {
-    if (!session) throw new Error('Connect Dropbox before renaming this vault.')
-    const renamed = await renameDropboxVault(session, vault, fileName)
-    await loadLibrary(session)
+    const renamed = await renameDropboxVault(await sessionForRequest(), vault, fileName)
+    libraryRequestRef.current += 1
+    setVaults((current) => upsertVault(current, renamed))
+    setStatus('connected')
+    setError('')
     return renamed
   }
 
   function disconnect() {
+    libraryRequestRef.current += 1
+    connectionEpochRef.current += 1
     void forgetDropboxRefreshToken().catch(() => undefined)
     setSession(null)
     setVaults([])
@@ -150,7 +172,7 @@ export function useDropbox() {
 
   return {
     status,
-    isConnected: status === 'connected' || status === 'loading',
+    isConnected: session !== null && (status === 'connected' || status === 'loading'),
     session,
     vaults,
     error,

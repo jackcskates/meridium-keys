@@ -48,9 +48,12 @@ be added only after the per-device App Lock envelope is implemented.
 - After one device authorization, launch and reload automatically restore the
   Dropbox library from the encrypted refresh credential. Sign out removes it.
 - Service-worker updates wait for an explicit Update action rather than
-  reloading an unlocked vault. The Update action is disabled until all open
-  vaults are locked. The app checks at launch, when it regains focus, when a
-  page is restored or connectivity returns, and every 60 seconds while it
+  reloading an unlocked vault. If vaults are open, the prompt first offers a
+  confirmed Lock vaults action that warns about unsaved forms; Update then
+  activates the waiting worker and reloads after activation. Activation errors
+  remain visible instead of leaving a button that appears to do nothing. The
+  app checks at launch, when it regains focus, when a page is restored or
+  connectivity returns, and every 60 seconds while it
   remains open. Access screens show the deployed build identifier for direct
   stale-version diagnosis.
 - Vault decryptors stay in memory while the PWA page is alive, including when

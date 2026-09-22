@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { Check, CheckSquare, Copy, Ellipsis, Eye, EyeOff, FolderInput, KeyRound, ListChecks, LoaderCircle, LockKeyhole, Pencil, Plus, Search, Square, Trash2, X } from 'lucide-react'
+import { EntryDetailSkeleton } from '../../components/LoadingSkeletons'
 import { clampVaultColumnWidths, columnResizeHandleWidth, detailColumnMinWidth, entryColumnMinWidth, folderColumnMinWidth, type ColumnWidths } from './columnSizing'
 import { copyProtectedText } from './copyProtectedText'
 import { EntryTypeIcon } from './EntryTypeIcon'
@@ -270,6 +271,7 @@ export function VaultBrowser({ vault, vaultId, canEdit, onChangeVaultPassword, o
   const [draft, setDraft] = useState<VaultEntryDraft | null>(null)
   const [visibleSecrets, setVisibleSecrets] = useState<Set<string>>(() => new Set())
   const [isLoadingEntry, setIsLoadingEntry] = useState(false)
+  const entryLoadRequestIdRef = useRef(0)
   const [isSaving, setIsSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
   const [entryToDelete, setEntryToDelete] = useState<VaultEntrySummary | null>(null)
@@ -440,6 +442,8 @@ export function VaultBrowser({ vault, vaultId, canEdit, onChangeVaultPassword, o
   }
 
   function resetEntryEditor() {
+    entryLoadRequestIdRef.current += 1
+    setIsLoadingEntry(false)
     setDraft(null)
     setChoosingType(false)
     setVisibleSecrets(new Set())
@@ -483,16 +487,20 @@ export function VaultBrowser({ vault, vaultId, canEdit, onChangeVaultPassword, o
 
   async function beginEdit(entry: VaultEntrySummary) {
     hideRevealedField()
+    const requestId = ++entryLoadRequestIdRef.current
     setIsLoadingEntry(true)
     setSaveError('')
     try {
-      setDraft(await onLoadEntry(entry.id))
+      const loaded = await onLoadEntry(entry.id)
+      if (requestId !== entryLoadRequestIdRef.current) return
+      setDraft(loaded)
       setChoosingType(false)
       setVisibleSecrets(new Set())
     } catch (error) {
+      if (requestId !== entryLoadRequestIdRef.current) return
       setSaveError(error instanceof Error ? error.message : 'That entry could not be prepared for editing.')
     } finally {
-      setIsLoadingEntry(false)
+      if (requestId === entryLoadRequestIdRef.current) setIsLoadingEntry(false)
     }
   }
 
@@ -948,7 +956,7 @@ export function VaultBrowser({ vault, vaultId, canEdit, onChangeVaultPassword, o
         title="Resize Keys and detail. Use arrow keys or drag; double-click to reset."
       />
       <section className="entry-detail" aria-label="Selected entry">
-        {selectionMode ? <div className="bulk-selection-summary"><span className="entry-glyph entry-glyph-large"><ListChecks aria-hidden="true" size={21} /></span><div><p className="eyebrow">Bulk selection</p><h2>{selectedVisibleEntryIds.size ? `${selectedVisibleEntryIds.size} selected` : 'Choose entries'}</h2><p>Select filtered entries, then move or delete them.</p></div></div> : choosingType ? <div className="entry-type-picker"><div className="entry-editor-heading"><div><p className="eyebrow">New entry</p><h2>Choose a type</h2></div></div><p className="type-picker-copy">The type controls which fields appear in the entry.</p><div className="entry-type-grid">{entryTypeDefinitions.map((type) => <button key={type.id} onClick={() => chooseType(type.id)} type="button"><span className="entry-glyph"><EntryTypeIcon type={type.id} /></span><span><strong>{type.label}</strong><small>{type.description}</small></span></button>)}</div><button className="text-button" onClick={resetEntryEditor} type="button">Cancel</button></div> : draft && definition ? <form autoComplete="off" className="entry-editor" onSubmit={saveEntry}>
+        {selectionMode ? <div className="bulk-selection-summary"><span className="entry-glyph entry-glyph-large"><ListChecks aria-hidden="true" size={21} /></span><div><p className="eyebrow">Bulk selection</p><h2>{selectedVisibleEntryIds.size ? `${selectedVisibleEntryIds.size} selected` : 'Choose entries'}</h2><p>Select filtered entries, then move or delete them.</p></div></div> : isLoadingEntry ? <EntryDetailSkeleton /> : choosingType ? <div className="entry-type-picker"><div className="entry-editor-heading"><div><p className="eyebrow">New entry</p><h2>Choose a type</h2></div></div><p className="type-picker-copy">The type controls which fields appear in the entry.</p><div className="entry-type-grid">{entryTypeDefinitions.map((type) => <button key={type.id} onClick={() => chooseType(type.id)} type="button"><span className="entry-glyph"><EntryTypeIcon type={type.id} /></span><span><strong>{type.label}</strong><small>{type.description}</small></span></button>)}</div><button className="text-button" onClick={resetEntryEditor} type="button">Cancel</button></div> : draft && definition ? <form autoComplete="off" className="entry-editor" onSubmit={saveEntry}>
           <div className="entry-editor-heading"><div><p className="eyebrow">{draft.id ? `Edit ${definition.label}` : `New ${definition.label}`}</p><h2>{draft.id ? draft.title || `Untitled ${definition.label}` : `Add ${definition.label}`}</h2></div>{!draft.id && <button className="text-button" onClick={() => { setDraft(null); setChoosingType(true) }} type="button">Change type</button>}</div>
           <label className="field"><span>Name</span><input autoFocus autoComplete="off" disabled={isSaving} onChange={(event) => setDraft({ ...draft, title: event.target.value })} required value={draft.title} /></label>
           <label className="field"><span>Folder</span><select disabled={isSaving} onChange={(event) => setDraft({ ...draft, groupId: event.target.value })} value={draft.groupId}><option value={vault.rootGroupId}>No folder</option>{vault.groups.filter((group) => !group.isRecycleBin).map((group) => <option key={group.id} value={group.id}>{group.path}</option>)}</select></label>

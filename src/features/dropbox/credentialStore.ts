@@ -1,7 +1,10 @@
+import { createSerialTaskQueue } from './serialTaskQueue'
+
 const databaseName = 'meridium-keys-auth'
 const storeName = 'credentials'
 const wrappingKeyId = 'dropbox-wrapping-key'
 const refreshTokenId = 'dropbox-refresh-token'
+const queueCredentialMutation = createSerialTaskQueue()
 
 export type SealedCredential = {
   iv: ArrayBuffer
@@ -54,34 +57,40 @@ async function wrappingKey(database: IDBDatabase) {
 }
 
 export async function rememberDropboxRefreshToken(refreshToken: string) {
-  const database = await openCredentialDatabase()
-  try {
-    const key = await wrappingKey(database)
-    await writeValue(database, refreshTokenId, await sealCredential(key, refreshToken))
-  } finally {
-    database.close()
-  }
+  return queueCredentialMutation(async () => {
+    const database = await openCredentialDatabase()
+    try {
+      const key = await wrappingKey(database)
+      await writeValue(database, refreshTokenId, await sealCredential(key, refreshToken))
+    } finally {
+      database.close()
+    }
+  })
 }
 
 export async function loadDropboxRefreshToken() {
-  const database = await openCredentialDatabase()
-  try {
-    const sealed = await readValue<SealedCredential>(database, refreshTokenId)
-    const key = await readValue<CryptoKey>(database, wrappingKeyId)
-    if (!sealed || !key) return null
-    return openCredential(key, sealed)
-  } catch {
-    return null
-  } finally {
-    database.close()
-  }
+  return queueCredentialMutation(async () => {
+    const database = await openCredentialDatabase()
+    try {
+      const sealed = await readValue<SealedCredential>(database, refreshTokenId)
+      const key = await readValue<CryptoKey>(database, wrappingKeyId)
+      if (!sealed || !key) return null
+      return openCredential(key, sealed)
+    } catch {
+      return null
+    } finally {
+      database.close()
+    }
+  })
 }
 
 export async function forgetDropboxRefreshToken() {
-  const database = await openCredentialDatabase()
-  try {
-    await requestResult(database.transaction(storeName, 'readwrite').objectStore(storeName).delete(refreshTokenId))
-  } finally {
-    database.close()
-  }
+  return queueCredentialMutation(async () => {
+    const database = await openCredentialDatabase()
+    try {
+      await requestResult(database.transaction(storeName, 'readwrite').objectStore(storeName).delete(refreshTokenId))
+    } finally {
+      database.close()
+    }
+  })
 }

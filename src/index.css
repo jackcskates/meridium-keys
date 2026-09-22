@@ -53,6 +53,11 @@
   --control-prominent-height: 3.25rem;
   --shadow-window: 0 28px 80px rgba(0, 0, 0, 0.46);
   --shadow-card: none;
+  --duration-fast: 160ms;
+  --duration-input-settle: 240ms;
+  --ease-standard: cubic-bezier(0.22, 1, 0.36, 1);
+  --shimmer-base: var(--neutral-200);
+  --shimmer-highlight: var(--neutral-400);
   --font-content: 'Plus Jakarta Sans Variable', 'Plus Jakarta Sans', sans-serif;
   --font-system: 'Inter Variable', Inter, sans-serif;
   font-family: var(--font-content);

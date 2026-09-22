@@ -1,16 +1,20 @@
 import { useEffect, useRef, useState, type DragEvent as ReactDragEvent } from 'react'
 import { useRegisterSW } from 'virtual:pwa-register/react'
+import { ConnectionSkeleton, VaultListSkeleton } from './components/LoadingSkeletons'
 import { appPasswordIsConfigured, clearAppPassword, configureAppPassword, verifyAppPassword } from './features/app-lock/verifyAppPassword'
 import { forgetDropboxRefreshToken } from './features/dropbox/credentialStore'
 import type { DropboxVaultFile } from './features/dropbox/types'
 import { useDropbox } from './features/dropbox/useDropbox'
 import { usePwaLifecycle } from './features/pwa/usePwaLifecycle'
+import { activateWaitingUpdate } from './features/pwa/activateUpdate'
 import { entryDragMime, VaultBrowser } from './features/vault/VaultBrowser'
 import { createVaultFile, toVaultFileName, type CreateVaultStage } from './features/vault/createVault'
 import { VaultOpenError } from './features/vault/kdbx'
 import { vaultPasswordRequirements } from './features/vault/passwordPolicy'
+import { persistPreparedChange, VaultSessionRecoveryError } from './features/vault/persistChange'
 import type { VaultEntryDraft, VaultEntrySummary, VaultGroupDraft, VaultMoveDestination, VaultSnapshot } from './features/vault/types'
 import { openVaultSession, type PreparedVaultChange, type UnlockedVaultSession, type UnlockStage } from './features/vault/unlockVault'
+import { vaultViewIdentity } from './features/vault/vaultViewIdentity'
 import './App.css'
 
 type View = 'connect' | 'vaults' | 'create' | 'unlock' | 'browse'
@@ -156,12 +160,30 @@ function DeleteVaultDialog({ vault, isDeleting, error, onCancel, onDelete }: {
   )
 }
 
-function UpdatePrompt({ hasUnlockedVaults = false }: { hasUnlockedVaults?: boolean }) {
+function UpdateLockDialog({ onCancel, onLock }: { onCancel: () => void; onLock: () => void }) {
+  const dialogRef = useRef<HTMLDialogElement>(null)
+
+  useEffect(() => {
+    const dialog = dialogRef.current
+    dialog?.showModal()
+    return () => { if (dialog?.open) dialog.close() }
+  }, [])
+
+  return <dialog aria-describedby="update-lock-description" aria-labelledby="update-lock-title" className="confirm-dialog" onCancel={(event) => { event.preventDefault(); onCancel() }} ref={dialogRef}><div className="confirm-dialog-card">
+    <span className="confirm-dialog-icon is-neutral"><Icon name="refresh" size={24} /></span>
+    <div className="confirm-dialog-copy"><p className="eyebrow">App update</p><h2 id="update-lock-title">Lock open vaults?</h2><p id="update-lock-description">Keys must close its in-memory vault sessions before updating. Any unsaved entry form will be discarded. You’ll need each vault’s master password to open it again.</p></div>
+    <div className="confirm-dialog-actions"><button className="button button-secondary" onClick={onCancel} type="button">Cancel</button><button className="button button-primary" onClick={onLock} type="button">Lock vaults</button></div>
+  </div></dialog>
+}
+
+function UpdatePrompt({ hasUnlockedVaults = false, onLockVaults }: { hasUnlockedVaults?: boolean; onLockVaults?: () => void }) {
   const [registration, setRegistration] = useState<ServiceWorkerRegistration | null>(null)
   const [hasWaitingWorker, setHasWaitingWorker] = useState(false)
+  const [isApplying, setIsApplying] = useState(false)
+  const [updateError, setUpdateError] = useState('')
+  const [showLockDialog, setShowLockDialog] = useState(false)
   const {
     needRefresh: [needRefresh],
-    updateServiceWorker,
   } = useRegisterSW({
     immediate: true,
     onRegisteredSW: (_serviceWorkerUrl, currentRegistration) => {
@@ -209,15 +231,37 @@ function UpdatePrompt({ hasUnlockedVaults = false }: { hasUnlockedVaults?: boole
     }
   }, [registration])
 
+  async function applyUpdate() {
+    if (isApplying || hasUnlockedVaults) return
+    if (!registration) {
+      setUpdateError('The updater is still starting. Try again in a moment.')
+      return
+    }
+    setIsApplying(true)
+    setUpdateError('')
+    try {
+      if (!registration.waiting) await registration.update()
+      if (registration.waiting) await activateWaitingUpdate(registration.waiting)
+      // No waiting worker means another tab already activated it; a reload still
+      // picks up the new app shell. Do not rely on clientsClaim for this path.
+      window.location.reload()
+    } catch (error) {
+      setUpdateError(error instanceof Error ? error.message : 'The update could not be installed. Try again.')
+      setIsApplying(false)
+    }
+  }
+
   if (!needRefresh && !hasWaitingWorker) return null
 
   return (
     <div className="update-toast" role="status">
       <div>
         <strong>Update ready</strong>
-        <span>{hasUnlockedVaults ? 'Lock all open vaults before updating.' : 'Ready to install.'}</span>
+        <span>{hasUnlockedVaults ? 'Lock open vaults first; unsaved forms will be discarded.' : isApplying ? 'Installing update…' : 'Ready to install.'}</span>
+        {updateError && <span className="update-error" role="alert">{updateError}</span>}
       </div>
-      <button className="button button-small" disabled={hasUnlockedVaults} onClick={() => updateServiceWorker(true)} type="button">Update</button>
+      {hasUnlockedVaults ? <button className="button button-small" onClick={() => setShowLockDialog(true)} type="button">Lock vaults</button> : <button className="button button-small" disabled={isApplying} onClick={() => void applyUpdate()} type="button">{isApplying ? 'Updating…' : 'Update'}</button>}
+      {showLockDialog && <UpdateLockDialog onCancel={() => setShowLockDialog(false)} onLock={() => { onLockVaults?.(); setShowLockDialog(false) }} />}
     </div>
   )
 }
@@ -426,6 +470,7 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
   const pwa = usePwaLifecycle()
   const [selectedVaultFile, setSelectedVaultFile] = useState<File | null>(null)
   const [selectedStorage, setSelectedStorage] = useState<'device' | 'dropbox' | null>(null)
+  const [deviceSelectionId, setDeviceSelectionId] = useState(0)
   const [activeDropboxVaultId, setActiveDropboxVaultId] = useState('')
   const [activeDropboxVault, setActiveDropboxVault] = useState<DropboxVaultFile | null>(null)
   const [openingDropboxVaultId, setOpeningDropboxVaultId] = useState('')
@@ -531,6 +576,7 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
     setSelectedFile(file.name)
     setSelectedStorage(storage)
     if (storage === 'device') {
+      setDeviceSelectionId((current) => current + 1)
       setActiveDropboxVaultId('')
       setActiveDropboxVault(null)
     }
@@ -706,8 +752,11 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
     if (!record) throw new Error('That vault is locked. Open it again before saving changes.')
     const encryptedFile = new File([prepared.data], record.remoteVault.name, { type: 'application/octet-stream' })
     try {
-      const updatedVault = await dropbox.save(record.remoteVault, encryptedFile)
-      const committedVault = await record.session.finishChange(prepared.changeId, true)
+      const { remote: updatedVault, vault: committedVault } = await persistPreparedChange(
+        prepared,
+        record.session,
+        () => dropbox.save(record.remoteVault, encryptedFile),
+      )
       const updatedFile = new File([encryptedFile], updatedVault.name, { type: 'application/octet-stream' })
       rememberOpenDropboxVault({ ...record, remoteVault: updatedVault, encryptedFile: updatedFile, snapshot: committedVault })
       if (activeDropboxVaultId === vaultId) {
@@ -720,13 +769,12 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
       }
       return committedVault
     } catch (error) {
-      try {
-        await record.session.finishChange(prepared.changeId, false)
-      } catch {
+      if (error instanceof VaultSessionRecoveryError) {
         forgetOpenDropboxVault(vaultId)
         if (activeDropboxVaultId === vaultId) {
           vaultSessionRef.current = null
           setVaultSnapshot(null)
+          setUnlockError(error.message)
           setView('unlock')
         }
       }
@@ -1014,7 +1062,7 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
                 </button>
               </div>
             })}
-            {!dropbox.vaults.length && <p className="sidebar-empty">{dropbox.status === 'loading' || dropbox.status === 'connecting' ? 'Connecting…' : dropboxConnected ? 'No vaults found' : 'Not connected'}</p>}
+            {!dropbox.vaults.length && (dropbox.status === 'loading' || dropbox.status === 'connecting' ? <VaultListSkeleton /> : <p className="sidebar-empty">{dropboxConnected ? 'No vaults found' : 'Not connected'}</p>)}
             <button className="sidebar-row sidebar-new-vault" onClick={() => setView(dropboxConnected ? 'create' : 'connect')} title="New vault" type="button">
               <span className="sidebar-row-icon sidebar-row-icon-dashed"><Icon name="plus" /></span>
               <span className="sidebar-row-copy"><strong>New vault</strong><small>Create in Dropbox</small></span>
@@ -1036,7 +1084,8 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
 
       <main className="workspace">
         <section className={`content-stage ${activeView === 'browse' ? 'is-vault-open' : ''}`}>
-          {activeView === 'connect' && (
+          {activeView === 'connect' && (dropbox.status === 'connecting' || dropbox.status === 'loading') && !dropbox.session && <ConnectionSkeleton />}
+          {activeView === 'connect' && (dropbox.status !== 'connecting' && dropbox.status !== 'loading' || Boolean(dropbox.session)) && (
             <div className="focus-card connect-card">
               <div className="security-emblem"><Icon name="shield" size={32} /></div>
               <div className="card-copy">
@@ -1045,7 +1094,7 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
                 <p className="lede">Connect Dropbox to create or open encrypted KDBX vaults. Your master passwords stay on this device.</p>
               </div>
               <div className="card-actions">
-                <button className="button button-primary" disabled={!pwa.isOnline || dropbox.status === 'connecting'} onClick={() => void dropbox.connect()} type="button"><Icon name="cloud" />{!pwa.isOnline ? 'Dropbox requires a connection' : dropbox.status === 'connecting' ? 'Opening Dropbox…' : 'Connect Dropbox'}</button>
+                <button className="button button-primary" disabled={!pwa.isOnline} onClick={() => void dropbox.connect()} type="button"><Icon name="cloud" />{!pwa.isOnline ? 'Dropbox requires a connection' : 'Connect Dropbox'}</button>
                 <button className="button button-secondary" onClick={() => fileInputRef.current?.click()} type="button"><Icon name="file" />Open KDBX from device</button>
               </div>
               {dropbox.error && <p className="unlock-error" role="alert">{dropbox.error}</p>}
@@ -1182,6 +1231,7 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
 
           {activeView === 'browse' && vaultSnapshot && (
             <VaultBrowser
+              key={vaultViewIdentity(selectedStorage, activeDropboxVaultId, deviceSelectionId)}
               canEdit={selectedStorage === 'dropbox' && Boolean(activeDropboxVault)}
               onChangeVaultPassword={changeOpenVaultPassword}
               onEntryDragEnd={clearVaultEntryDrag}
@@ -1240,7 +1290,7 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
         targetName={dropbox.vaults.find((vault) => vault.id === transferRequest.targetVaultId)?.name.replace(/\.kdbx$/i, '') || 'the destination vault'}
       />}
       <InstallPrompt canPromptInstall={pwa.canPromptInstall} install={pwa.install} isIos={pwa.isIos} isStandalone={pwa.isStandalone} />
-      <UpdatePrompt hasUnlockedVaults={Boolean(vaultSnapshot) || Object.keys(openDropboxVaultSnapshots).length > 0} />
+      <UpdatePrompt hasUnlockedVaults={Boolean(vaultSnapshot) || Object.keys(openDropboxVaultSnapshots).length > 0} onLockVaults={() => { closeAllVaultSessions(); setView('vaults') }} />
     </div>
   )
 }
