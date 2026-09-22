@@ -384,6 +384,17 @@ they never existed; mark them superseded and link to the replacement.
   sessions during an OAuth round trip, and prompt-only service-worker updates
   can leave an installed app on broken code without a visible update action.
 
+### D-044 - Reversible entry-type conversion
+
+- **Status:** Accepted
+- **Decision:** Allow type changes from an individual entry’s Edit form and from
+  bulk selection within the current folder. Update the Meridium type metadata,
+  validate every required destination field, push standard KDBX history, and
+  preserve existing fields that the destination format does not display.
+- **Reason:** Imported entries are often inferred as Login even when Password or
+  another format is more accurate. Retagging should be efficient and must not
+  silently destroy usernames, secrets, URLs, notes, or custom KDBX fields.
+
 ## Open
 
 ### D-005 - Standard KDBX compatibility

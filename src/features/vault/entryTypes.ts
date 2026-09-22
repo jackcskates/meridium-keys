@@ -142,8 +142,24 @@ export function createEmptyEntryDraft(type: VaultEntryType, groupId: string): Va
   }
 }
 
-export function allTypedStorageKeys() {
-  return new Set(entryTypeDefinitions.flatMap((definition) => definition.fields.map((field) => field.storageKey)))
+export function allTypedFieldDefinitions() {
+  const fields = new Map<string, EntryFieldDefinition>()
+  for (const field of entryTypeDefinitions.flatMap((definition) => definition.fields)) {
+    if (!fields.has(field.key)) fields.set(field.key, field)
+  }
+  return [...fields.values()]
+}
+
+export function changeEntryDraftType(draft: VaultEntryDraft, type: VaultEntryType): VaultEntryDraft {
+  if (draft.type === type) return draft
+  const sourceFields = new Map(getEntryTypeDefinition(draft.type).fields.map((field) => [field.storageKey, field]))
+  const fields = { ...draft.fields }
+  for (const targetField of getEntryTypeDefinition(type).fields) {
+    if (fields[targetField.key] !== undefined) continue
+    const sourceField = sourceFields.get(targetField.storageKey)
+    fields[targetField.key] = sourceField ? fields[sourceField.key] || '' : ''
+  }
+  return { ...draft, type, fields }
 }
 
 export function entryTypeLabel(type: VaultEntryType) {

@@ -1,15 +1,16 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
-import { Check, CheckSquare, Copy, Ellipsis, Eye, EyeOff, FolderInput, ListChecks, LoaderCircle, LockKeyhole, Pencil, Plus, Square, Trash2, X } from 'lucide-react'
+import { Check, CheckSquare, Copy, Ellipsis, Eye, EyeOff, FolderInput, ListChecks, LoaderCircle, LockKeyhole, Pencil, Plus, Square, Tags, Trash2, X } from 'lucide-react'
 import { clampVaultColumnWidths, columnResizeHandleWidth, detailColumnMinWidth, entryColumnMinWidth, folderColumnMinWidth, type ColumnWidths } from './columnSizing'
 import { copyProtectedText } from './copyProtectedText'
 import { EntryTypeIcon } from './EntryTypeIcon'
-import { createEmptyEntryDraft, entryTypeDefinitions, entryTypeLabel, getEntryTypeDefinition, type EntryFieldDefinition } from './entryTypes'
+import { changeEntryDraftType, createEmptyEntryDraft, entryTypeDefinitions, entryTypeLabel, getEntryTypeDefinition, type EntryFieldDefinition } from './entryTypes'
 import { generateServicePassword, generatedPasswordLength } from './passwordGenerator'
-import type { VaultEntryDetails, VaultEntryDraft, VaultEntrySummary, VaultGroupDraft, VaultGroupSummary, VaultSnapshot } from './types'
+import type { VaultEntryDetails, VaultEntryDraft, VaultEntrySummary, VaultEntryType, VaultGroupDraft, VaultGroupSummary, VaultSnapshot } from './types'
 
 type VaultBrowserProps = {
   vault: VaultSnapshot
   canEdit: boolean
+  onChangeEntriesType: (entryIds: string[], entryType: VaultEntryType) => Promise<VaultSnapshot>
   onDeleteEntry: (entryId: string) => Promise<VaultSnapshot>
   onDeleteEntriesForever: (entryIds: string[]) => Promise<VaultSnapshot>
   onDeleteGroup: (groupId: string) => Promise<VaultSnapshot>
@@ -86,6 +87,25 @@ function DeleteEntriesForeverDialog({ entries, isDeleting, error, onCancel, onDe
     {error && <p className="unlock-error" role="alert">{error}</p>}
     <div className="confirm-dialog-actions"><button className="button button-secondary" disabled={isDeleting} onClick={onCancel} type="button">Cancel</button><button className="button button-danger" disabled={isDeleting} onClick={onDelete} type="button">{isDeleting ? 'Deleting forever…' : `Delete ${count} forever`}</button></div>
   </div></DialogShell>
+}
+
+function ChangeEntriesTypeDialog({ entries, isSaving, error, onCancel, onSave }: {
+  entries: VaultEntrySummary[]
+  isSaving: boolean
+  error: string
+  onCancel: () => void
+  onSave: (type: VaultEntryType) => void
+}) {
+  const commonType = entries.every((entry) => entry.type === entries[0]?.type) ? entries[0]?.type : undefined
+  const [type, setType] = useState<VaultEntryType>(commonType === 'login' ? 'password' : entryTypeDefinitions.find((definition) => definition.id !== commonType)?.id || 'login')
+  const count = entries.length
+  return <DialogShell describedBy="change-entry-type-description" labelledBy="change-entry-type-title" locked={isSaving} onCancel={onCancel}><form className="confirm-dialog-card" onSubmit={(event) => { event.preventDefault(); onSave(type) }}>
+    <span className="confirm-dialog-icon"><Tags aria-hidden="true" size={24} /></span>
+    <div className="confirm-dialog-copy"><p className="eyebrow">Entry format</p><h2 id="change-entry-type-title">Change {count} {count === 1 ? 'entry' : 'entries'}?</h2><p id="change-entry-type-description">Shared values move into the new format. Other existing KDBX fields remain preserved if you switch the format back later.</p></div>
+    <label className="field"><span>New entry type</span><select autoFocus disabled={isSaving} onChange={(event) => setType(event.target.value as VaultEntryType)} value={type}>{entryTypeDefinitions.map((definition) => <option key={definition.id} value={definition.id}>{definition.label}</option>)}</select></label>
+    {error && <p className="unlock-error" role="alert">{error}</p>}
+    <div className="confirm-dialog-actions"><button className="button button-secondary" disabled={isSaving} onClick={onCancel} type="button">Cancel</button><button className="button button-primary" disabled={isSaving || entries.every((entry) => entry.type === type)} type="submit">{isSaving ? 'Changing…' : `Change to ${entryTypeLabel(type)}`}</button></div>
+  </form></DialogShell>
 }
 
 function RenameVaultDialog({ currentName, isSaving, error, onCancel, onSave }: {
@@ -171,7 +191,7 @@ function MoveEntryDialog({ entry, vault, isMoving, error, onCancel, onMove }: {
   </form></DialogShell>
 }
 
-export function VaultBrowser({ vault, canEdit, onDeleteEntry, onDeleteEntriesForever, onDeleteGroup, onLoadEntry, onLock, onMoveEntry, onReadProtectedField, onRenameVault, onSaveEntry, onSaveGroup }: VaultBrowserProps) {
+export function VaultBrowser({ vault, canEdit, onChangeEntriesType, onDeleteEntry, onDeleteEntriesForever, onDeleteGroup, onLoadEntry, onLock, onMoveEntry, onReadProtectedField, onRenameVault, onSaveEntry, onSaveGroup }: VaultBrowserProps) {
   const activeEntries = useMemo(() => vault.entries.filter((entry) => !entry.isDeleted), [vault.entries])
   const unfiledEntries = useMemo(() => activeEntries.filter((entry) => entry.groupId === vault.rootGroupId), [activeEntries, vault.rootGroupId])
   const activeGroups = useMemo(() => vault.groups.filter((group) => !group.isRecycleBin), [vault.groups])
@@ -200,8 +220,11 @@ export function VaultBrowser({ vault, canEdit, onDeleteEntry, onDeleteEntriesFor
     return new Set([...selectedEntryIds].filter((entryId) => visibleIds.has(entryId)))
   }, [selectedEntryIds, visibleEntries])
   const [entriesToDeleteForever, setEntriesToDeleteForever] = useState<VaultEntrySummary[]>([])
+  const [entriesToRetype, setEntriesToRetype] = useState<VaultEntrySummary[]>([])
   const [isDeleting, setIsDeleting] = useState(false)
+  const [isChangingType, setIsChangingType] = useState(false)
   const [deleteError, setDeleteError] = useState('')
+  const [typeChangeError, setTypeChangeError] = useState('')
   const [renameDialogOpen, setRenameDialogOpen] = useState(false)
   const [isRenaming, setIsRenaming] = useState(false)
   const [renameError, setRenameError] = useState('')
@@ -511,6 +534,22 @@ export function VaultBrowser({ vault, canEdit, onDeleteEntry, onDeleteEntriesFor
     }
   }
 
+  async function changeEntriesType(type: VaultEntryType) {
+    if (!entriesToRetype.length) return
+    setIsChangingType(true)
+    setTypeChangeError('')
+    try {
+      await onChangeEntriesType(entriesToRetype.map((entry) => entry.id), type)
+      setEntriesToRetype([])
+      stopSelecting()
+      resetEntryEditor()
+    } catch (error) {
+      setTypeChangeError(error instanceof Error ? error.message : 'The selected entry types could not be changed safely.')
+    } finally {
+      setIsChangingType(false)
+    }
+  }
+
   async function renameVault(name: string) {
     setIsRenaming(true)
     setRenameError('')
@@ -756,6 +795,7 @@ export function VaultBrowser({ vault, canEdit, onDeleteEntry, onDeleteEntriesFor
         <div className={`panel-heading entry-panel-heading ${selectionMode ? 'is-selecting' : ''}`}><span className="entry-panel-title"><h2>Keys</h2>{selectionMode && <small aria-live="polite">{selectedVisibleEntryIds.size} selected</small>}</span><span className="entry-selection-actions">
           {selectionMode ? <>
               <button aria-label={selectedVisibleEntryIds.size === visibleEntries.length ? 'Clear selection' : `Select all ${visibleEntries.length} entries`} className="panel-action" disabled={isDeleting} onClick={() => setSelectedEntryIds(selectedVisibleEntryIds.size === visibleEntries.length ? new Set() : new Set(visibleEntries.map((entry) => entry.id)))} title={selectedVisibleEntryIds.size === visibleEntries.length ? 'Clear selection' : 'Select all'} type="button">{selectedVisibleEntryIds.size === visibleEntries.length ? <CheckSquare aria-hidden="true" size={18} /> : <ListChecks aria-hidden="true" size={18} />}</button>
+              <button aria-label="Change selected entry types" className="panel-action" disabled={!selectedVisibleEntryIds.size || isDeleting || isChangingType} onClick={() => { setTypeChangeError(''); setEntriesToRetype(visibleEntries.filter((entry) => selectedVisibleEntryIds.has(entry.id))) }} title="Change entry type" type="button"><Tags aria-hidden="true" size={18} /></button>
               <button aria-label="Delete selected entries forever" className="panel-action is-danger" disabled={!selectedVisibleEntryIds.size || isDeleting} onClick={() => { setDeleteError(''); setEntriesToDeleteForever(visibleEntries.filter((entry) => selectedVisibleEntryIds.has(entry.id))) }} title="Delete selected forever" type="button"><Trash2 aria-hidden="true" size={18} /></button>
               <button aria-label="Stop selecting entries" className="panel-action" disabled={isDeleting} onClick={stopSelecting} title="Done selecting" type="button"><X aria-hidden="true" size={18} /></button>
           </> : <>{canEdit && visibleEntries.length > 0 && <button aria-label="Select multiple entries" className="panel-action" onClick={() => { setSelectionMode(true); setSelectedEntryIds(new Set()) }} title="Select multiple entries" type="button"><ListChecks aria-hidden="true" size={17} /></button>}{canEdit && <button aria-label="Add entry" className="panel-action" disabled={isSaving || isDeleting} onClick={beginCreate} title="Add entry" type="button"><Plus aria-hidden="true" size={17} /></button>}</>}
@@ -806,6 +846,7 @@ export function VaultBrowser({ vault, canEdit, onDeleteEntry, onDeleteEntriesFor
         {selectionMode ? <div className="bulk-selection-summary"><span className="entry-glyph entry-glyph-large"><ListChecks aria-hidden="true" size={21} /></span><div><p className="eyebrow">Bulk selection</p><h2>{selectedVisibleEntryIds.size ? `${selectedVisibleEntryIds.size} selected` : 'Choose entries'}</h2><p>Select entries from this folder, then use the trash icon to delete them permanently.</p></div></div> : choosingType ? <div className="entry-type-picker"><div className="entry-editor-heading"><div><p className="eyebrow">New entry</p><h2>Choose a type</h2></div></div><p className="type-picker-copy">The type controls which fields appear in the entry.</p><div className="entry-type-grid">{entryTypeDefinitions.map((type) => <button key={type.id} onClick={() => chooseType(type.id)} type="button"><span className="entry-glyph"><EntryTypeIcon type={type.id} /></span><span><strong>{type.label}</strong><small>{type.description}</small></span></button>)}</div><button className="text-button" onClick={resetEntryEditor} type="button">Cancel</button></div> : draft && definition ? <form autoComplete="off" className="entry-editor" onSubmit={saveEntry}>
           <div className="entry-editor-heading"><div><p className="eyebrow">{draft.id ? `Edit ${definition.label}` : `New ${definition.label}`}</p><h2>{draft.id ? draft.title || `Untitled ${definition.label}` : `Add ${definition.label}`}</h2></div>{!draft.id && <button className="text-button" onClick={() => { setDraft(null); setChoosingType(true) }} type="button">Change type</button>}</div>
           <label className="field"><span>Name</span><input autoFocus autoComplete="off" disabled={isSaving} onChange={(event) => setDraft({ ...draft, title: event.target.value })} required value={draft.title} /></label>
+          {draft.id && <label className="field"><span>Entry type</span><select disabled={isSaving} onChange={(event) => { setDraft(changeEntryDraftType(draft, event.target.value as VaultEntryType)); setVisibleSecrets(new Set()); setSaveError('') }} value={draft.type}>{entryTypeDefinitions.map((type) => <option key={type.id} value={type.id}>{type.label}</option>)}</select><small>Fields outside the selected format remain preserved in the KDBX file.</small></label>}
           <label className="field"><span>Folder</span><select disabled={isSaving} onChange={(event) => setDraft({ ...draft, groupId: event.target.value })} value={draft.groupId}><option value={vault.rootGroupId}>No folder</option>{vault.groups.filter((group) => !group.isRecycleBin).map((group) => <option key={group.id} value={group.id}>{group.path}</option>)}</select></label>
           {definition.fields.map((field) => <EntryField disabled={isSaving} field={field} key={field.key} onChange={(value) => setDraft({ ...draft, fields: { ...draft.fields, [field.key]: value } })} onGenerate={field.key === 'password' ? () => setDraft({ ...draft, fields: { ...draft.fields, [field.key]: generateServicePassword() } }) : undefined} onToggle={() => setVisibleSecrets((current) => { const next = new Set(current); if (next.has(field.key)) next.delete(field.key); else next.add(field.key); return next })} value={draft.fields[field.key] || ''} visible={visibleSecrets.has(field.key)} />)}
           {saveError && <p className="unlock-error" role="alert">{saveError}</p>}<div className="entry-editor-actions"><button className="button button-secondary" disabled={isSaving} onClick={resetEntryEditor} type="button">Cancel</button><button className="button button-primary" disabled={isSaving} type="submit">{isSaving ? 'Encrypting and saving…' : 'Save entry'}</button></div>
@@ -822,6 +863,7 @@ export function VaultBrowser({ vault, canEdit, onDeleteEntry, onDeleteEntriesFor
     </div>
     {entryToDelete && <DeleteEntryDialog entry={entryToDelete} error={deleteError} isDeleting={isDeleting} onCancel={() => { if (!isDeleting) { setDeleteError(''); setEntryToDelete(null) } }} onDelete={() => void deleteEntry()} />}
     {entriesToDeleteForever.length > 0 && <DeleteEntriesForeverDialog entries={entriesToDeleteForever} error={deleteError} isDeleting={isDeleting} onCancel={() => { if (!isDeleting) { setDeleteError(''); setEntriesToDeleteForever([]) } }} onDelete={() => void deleteEntriesForever()} />}
+    {entriesToRetype.length > 0 && <ChangeEntriesTypeDialog entries={entriesToRetype} error={typeChangeError} isSaving={isChangingType} onCancel={() => { if (!isChangingType) { setTypeChangeError(''); setEntriesToRetype([]) } }} onSave={(type) => void changeEntriesType(type)} />}
     {entryToMove && <MoveEntryDialog entry={entryToMove} error={moveError} isMoving={isMovingEntry} onCancel={() => { if (!isMovingEntry) { setMoveError(''); setEntryToMove(null) } }} onMove={(groupId) => void moveEntry(entryToMove.id, groupId)} vault={vault} />}
     {groupDialog && <GroupNameDialog error={groupError} group={groupDialog === 'new' ? null : groupDialog} isSaving={isSavingGroup} onCancel={() => { if (!isSavingGroup) { setGroupError(''); setGroupDialog(null) } }} onSave={(group) => void saveGroup(group)} rootGroupId={vault.rootGroupId} />}
     {groupToDelete && <DeleteGroupDialog error={groupError} group={groupToDelete} isDeleting={isSavingGroup} onCancel={() => { if (!isSavingGroup) { setGroupError(''); setGroupToDelete(null) } }} onDelete={() => void deleteGroup()} />}

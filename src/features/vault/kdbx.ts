@@ -21,7 +21,7 @@ import type {
   VaultOpenErrorCode,
   VaultSnapshot,
 } from './types'
-import { allTypedStorageKeys, entryTypeMetadataKey, getEntryTypeDefinition, isVaultEntryType } from './entryTypes'
+import { allTypedFieldDefinitions, entryTypeMetadataKey, entryTypeLabel, getEntryTypeDefinition, isVaultEntryType } from './entryTypes'
 
 const currentArgon2Version = 0x13
 let argon2Configured = false
@@ -260,14 +260,13 @@ export function readKdbxEntryDetails(database: Kdbx, entryId: string): VaultEntr
   if (!entry?.parentGroup) throw new VaultOpenError('WORKER_FAILURE', 'That entry could not be found in the open vault.')
 
   const type = entryTypeFor(entry)
-  const definition = getEntryTypeDefinition(type)
 
   return {
     id: entry.uuid.toString(),
     groupId: entry.parentGroup.uuid.toString(),
     type,
     title: entryFieldText(entry, 'Title'),
-    fields: Object.fromEntries(definition.fields.map((field) => [field.key, entryFieldText(entry, field.storageKey)])),
+    fields: Object.fromEntries(allTypedFieldDefinitions().map((field) => [field.key, entryFieldText(entry, field.storageKey)])),
   }
 }
 
@@ -309,14 +308,13 @@ export async function prepareKdbxEntrySave(database: Kdbx, draft: VaultEntryDraf
     const requiredField = definition.fields.find((field) => field.required && !draft.fields[field.key]?.trim())
     if (requiredField) throw new VaultOpenError('WORKER_FAILURE', `Enter ${requiredField.label.toLowerCase()} before saving this entry.`)
 
-    for (const storageKey of allTypedStorageKeys()) {
-      if (!['UserName', 'Password', 'URL', 'Notes'].includes(storageKey)) entry.fields.delete(storageKey)
-    }
     entry.fields.set('Title', draft.title.trim())
-    entry.fields.set('UserName', '')
-    entry.fields.set('Password', ProtectedValue.fromString(''))
-    entry.fields.set('URL', '')
-    entry.fields.set('Notes', '')
+    if (!draft.id) {
+      entry.fields.set('UserName', '')
+      entry.fields.set('Password', ProtectedValue.fromString(''))
+      entry.fields.set('URL', '')
+      entry.fields.set('Notes', '')
+    }
     entry.fields.set(entryTypeMetadataKey, draft.type)
     for (const field of definition.fields) {
       const value = draft.fields[field.key] || ''
@@ -324,6 +322,8 @@ export async function prepareKdbxEntrySave(database: Kdbx, draft: VaultEntryDraf
         entry.fields.set(field.storageKey, ProtectedValue.fromString(value))
       } else if (value || ['UserName', 'URL', 'Notes'].includes(field.storageKey)) {
         entry.fields.set(field.storageKey, value)
+      } else {
+        entry.fields.delete(field.storageKey)
       }
     }
     entry.times.update()
@@ -335,6 +335,39 @@ export async function prepareKdbxEntrySave(database: Kdbx, draft: VaultEntryDraf
       vault: mapKdbxSnapshot(workingDatabase, fileName),
       entryId: entry.uuid.toString(),
     }
+  } catch (error) {
+    throw mapKdbxError(error)
+  }
+}
+
+export async function prepareKdbxEntriesTypeChange(database: Kdbx, entryIds: string[], type: VaultEntryType, fileName: string) {
+  const uniqueEntryIds = [...new Set(entryIds)]
+  if (!uniqueEntryIds.length) throw new VaultOpenError('WORKER_FAILURE', 'Select at least one entry to change its type.')
+
+  try {
+    const clonedData = await database.save()
+    const workingDatabase = await Kdbx.load(clonedData, database.credentials)
+    const entries = uniqueEntryIds.map((entryId) => findEntry(workingDatabase, entryId))
+    if (entries.some((entry) => !entry?.parentGroup)) {
+      throw new VaultOpenError('WORKER_FAILURE', 'One or more selected entries no longer exist in the open vault.')
+    }
+    const recycleBinId = workingDatabase.meta.recycleBinUuid?.toString() || ''
+    const definition = getEntryTypeDefinition(type)
+    for (const entry of entries as KdbxEntry[]) {
+      if (entry.parentGroup && groupIsInRecycleBin(entry.parentGroup, recycleBinId)) {
+        throw new VaultOpenError('WORKER_FAILURE', 'Restore Recycle Bin entries before changing their type.')
+      }
+      const requiredField = definition.fields.find((field) => field.required && !entryFieldText(entry, field.storageKey).trim())
+      if (requiredField) {
+        const title = entryFieldText(entry, 'Title').trim() || 'Untitled entry'
+        throw new VaultOpenError('WORKER_FAILURE', `${title} needs ${requiredField.label.toLowerCase()} before it can become ${entryTypeLabel(type)}.`)
+      }
+      entry.pushHistory()
+      entry.fields.set(entryTypeMetadataKey, type)
+      entry.times.update()
+    }
+    const data = await workingDatabase.save()
+    return { database: workingDatabase, data, vault: mapKdbxSnapshot(workingDatabase, fileName) }
   } catch (error) {
     throw mapKdbxError(error)
   }

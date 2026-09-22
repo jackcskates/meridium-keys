@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DOMParser as XmlDomParser, XMLSerializer as XmlSerializer } from '@xmldom/xmldom'
 import { Consts, Credentials, Kdbx, ProtectedValue } from 'kdbxweb'
-import { configureArgon2, createKdbxData, loadKdbxDatabase, prepareKdbxEntriesPermanentDelete, prepareKdbxEntryDelete, prepareKdbxEntryMove, prepareKdbxEntrySave, prepareKdbxGroupDelete, prepareKdbxGroupSave, prepareKdbxVaultRename, readKdbxEntryDetails, readKdbxProtectedField, readKdbxSnapshot, VaultOpenError } from './kdbx'
+import { configureArgon2, createKdbxData, loadKdbxDatabase, prepareKdbxEntriesPermanentDelete, prepareKdbxEntriesTypeChange, prepareKdbxEntryDelete, prepareKdbxEntryMove, prepareKdbxEntrySave, prepareKdbxGroupDelete, prepareKdbxGroupSave, prepareKdbxVaultRename, readKdbxEntryDetails, readKdbxProtectedField, readKdbxSnapshot, VaultOpenError } from './kdbx'
 import { createEmptyEntryDraft, entryTypeDefinitions } from './entryTypes'
 
 // kdbxweb uses browser-native XML APIs in production. Supply the current,
@@ -147,6 +147,61 @@ describe('readKdbxSnapshot', () => {
     expect(updated).toMatchObject({ title: 'Updated Account', type: 'login', fields: expect.objectContaining({ password: 'updated-secret' }) })
     const reopenedEntry = [...reopened.getDefaultGroup().allEntries()].find((entry) => entry.uuid.toString() === existing.id)
     expect(reopenedEntry?.history).toHaveLength(1)
+  })
+
+  it('changes one or more entry types while preserving fields outside the new format', async () => {
+    const original = await createKdbxData('Type Change Fixture', fixturePassword)
+    let database = await loadKdbxDatabase(original, fixturePassword)
+    const groupId = database.getDefaultGroup().uuid.toString()
+    const entryIds: string[] = []
+    for (const title of ['First Login', 'Second Login']) {
+      const prepared = await prepareKdbxEntrySave(database, {
+        groupId,
+        type: 'login',
+        title,
+        fields: {
+          username: `${title.toLowerCase().replace(' ', '.')}@example.test`,
+          password: `${title}-secret`,
+          url: 'https://example.test',
+          notes: 'Preserve every shared field',
+        },
+      }, 'type-change.kdbx')
+      database = prepared.database
+      entryIds.push(prepared.entryId)
+    }
+
+    const changed = await prepareKdbxEntriesTypeChange(database, entryIds, 'password', 'type-change.kdbx')
+    const reopened = await loadKdbxDatabase(changed.data, fixturePassword)
+
+    for (const entryId of entryIds) {
+      const details = readKdbxEntryDetails(reopened, entryId)
+      expect(details.type).toBe('password')
+      expect(details.fields.password).toContain('Login-secret')
+      expect(details.fields.username).toContain('@example.test')
+      const kdbxEntry = [...reopened.getDefaultGroup().allEntries()].find((entry) => entry.uuid.toString() === entryId)
+      expect(kdbxEntry?.history).toHaveLength(1)
+    }
+
+    const restored = await prepareKdbxEntriesTypeChange(reopened, entryIds, 'login', 'type-change.kdbx')
+    const restoredDatabase = await loadKdbxDatabase(restored.data, fixturePassword)
+    expect(entryIds.map((entryId) => readKdbxEntryDetails(restoredDatabase, entryId).fields.username)).toEqual([
+      'first.login@example.test',
+      'second.login@example.test',
+    ])
+  })
+
+  it('does not change an entry to a format when a required destination field is empty', async () => {
+    const original = await createKdbxData('Required Type Fixture', fixturePassword)
+    const database = await loadKdbxDatabase(original, fixturePassword)
+    const created = await prepareKdbxEntrySave(database, {
+      groupId: database.getDefaultGroup().uuid.toString(),
+      type: 'login',
+      title: 'Passwordless Login',
+      fields: { username: 'owner@example.test', password: '', url: '', notes: '' },
+    }, 'required-type.kdbx')
+
+    await expect(prepareKdbxEntriesTypeChange(created.database, [created.entryId], 'password', 'required-type.kdbx'))
+      .rejects.toThrow('needs password before it can become Password')
   })
 
   it('decrypts only a requested protected field for direct copy', async () => {

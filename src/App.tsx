@@ -9,7 +9,7 @@ import { VaultBrowser } from './features/vault/VaultBrowser'
 import { createVaultFile, toVaultFileName, type CreateVaultStage } from './features/vault/createVault'
 import { VaultOpenError } from './features/vault/kdbx'
 import { vaultPasswordRequirements } from './features/vault/passwordPolicy'
-import type { VaultEntryDraft, VaultGroupDraft, VaultSnapshot } from './features/vault/types'
+import type { VaultEntryDraft, VaultEntryType, VaultGroupDraft, VaultSnapshot } from './features/vault/types'
 import { openVaultSession, type PreparedVaultChange, type UnlockedVaultSession, type UnlockStage } from './features/vault/unlockVault'
 import './App.css'
 
@@ -637,6 +637,12 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
     return persistPreparedVaultChange(await session.prepareEntriesPermanentDelete(entryIds))
   }
 
+  async function changeVaultEntriesType(entryIds: string[], entryType: VaultEntryType) {
+    const session = vaultSessionRef.current
+    if (!session) throw new Error('The vault is locked. Open it again before changing entry types.')
+    return persistPreparedVaultChange(await session.prepareEntriesTypeChange(entryIds, entryType))
+  }
+
   async function renameOpenVault(name: string) {
     const session = vaultSessionRef.current
     const remoteVault = activeDropboxVault
@@ -946,6 +952,7 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
           {activeView === 'browse' && vaultSnapshot && (
             <VaultBrowser
               canEdit={selectedStorage === 'dropbox' && Boolean(activeDropboxVault)}
+              onChangeEntriesType={changeVaultEntriesType}
               onDeleteEntriesForever={deleteVaultEntriesForever}
               onDeleteGroup={deleteVaultGroup}
               onDeleteEntry={deleteVaultEntry}
