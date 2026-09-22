@@ -311,6 +311,21 @@ describe('readKdbxSnapshot', () => {
     await expect(readKdbxSnapshot(prepared.data, 'wrong password')).rejects.toMatchObject({ code: 'INVALID_CREDENTIALS' })
   })
 
+  it('creates a separately named encrypted copy while leaving the source unchanged', async () => {
+    const original = await createFixture(Consts.KdfId.Argon2id)
+    const source = await loadKdbxDatabase(original, fixturePassword)
+    const duplicate = await prepareKdbxVaultRename(source, 'Personal', 'Personal.kdbx')
+
+    const originalSnapshot = await readKdbxSnapshot(original, fixturePassword, 'Imported.kdbx')
+    const duplicateSnapshot = await readKdbxSnapshot(duplicate.data, fixturePassword, 'Personal.kdbx')
+    expect(originalSnapshot.databaseName).toBe('Compatibility Fixture')
+    expect(source.meta.name).toBe('Compatibility Fixture')
+    expect(duplicateSnapshot.databaseName).toBe('Personal')
+    expect(duplicateSnapshot.entries).toContainEqual(expect.objectContaining({ title: 'Example Account' }))
+    expect(duplicate.data.byteLength).toBeGreaterThan(0)
+    await expect(readKdbxSnapshot(duplicate.data, 'wrong password')).rejects.toMatchObject({ code: 'INVALID_CREDENTIALS' })
+  })
+
   it('verifies the current password and re-encrypts the complete vault with a new password', async () => {
     const original = await createFixture(Consts.KdfId.Argon2id)
     const database = await loadKdbxDatabase(original, fixturePassword)

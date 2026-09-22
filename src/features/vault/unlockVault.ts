@@ -150,6 +150,12 @@ export class UnlockedVaultSession {
     return { changeId: message.changeId, data: message.data, vault: message.vault }
   }
 
+  async duplicateVault(databaseName: string, fileName: string): Promise<File> {
+    const message = await this.request((requestId) => ({ type: 'duplicate-vault', databaseName, fileName, requestId }))
+    if (message.type !== 'duplicated') throw new VaultOpenError('WORKER_FAILURE', 'The secure vault worker returned an unexpected duplicate response.')
+    return new File([message.data], message.fileName, { type: 'application/octet-stream' })
+  }
+
   async prepareVaultPasswordChange(currentPassword: string, newPassword: string): Promise<PreparedVaultChange> {
     const message = await this.request((requestId) => ({ type: 'prepare-vault-password-change', currentPassword, newPassword, requestId }))
     if (message.type !== 'change-prepared') throw new VaultOpenError('WORKER_FAILURE', 'The secure vault worker returned an unexpected password-change response.')

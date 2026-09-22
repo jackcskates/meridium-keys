@@ -223,6 +223,18 @@ scope.onmessage = async (event: MessageEvent<VaultWorkerRequest>) => {
       return
     }
 
+    if (event.data.type === 'duplicate-vault') {
+      if (pendingChange) throw new VaultOpenError('WORKER_FAILURE', 'Finish the current save before duplicating this vault.')
+      const duplicate = await prepareKdbxVaultRename(database, event.data.databaseName, event.data.fileName)
+      scope.postMessage({
+        type: 'duplicated',
+        data: duplicate.data,
+        fileName: event.data.fileName,
+        requestId: event.data.requestId,
+      } satisfies VaultWorkerResponse, [duplicate.data])
+      return
+    }
+
     if (event.data.type === 'prepare-vault-password-change') {
       if (pendingChange) throw new VaultOpenError('WORKER_FAILURE', 'Finish the current save before changing this vault password.')
       const prepared = await prepareKdbxVaultPasswordChange(database, event.data.currentPassword, event.data.newPassword, fileName)

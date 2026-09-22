@@ -28,6 +28,7 @@ type VaultBrowserProps = {
   onDropEntryOnVault?: (entryId: string, vaultId: string) => void
   onVaultDropTargetChange?: (vaultId: string) => void
   onRenameVault: (name: string) => Promise<VaultSnapshot>
+  onDuplicateVault: (name: string) => Promise<void>
   onSaveEntry: (entry: VaultEntryDraft) => Promise<{ entryId: string; vault: VaultSnapshot }>
   onSaveGroup: (group: VaultGroupDraft) => Promise<{ groupId: string; vault: VaultSnapshot }>
 }
@@ -111,6 +112,22 @@ function RenameVaultDialog({ currentName, isSaving, error, onCancel, onSave }: {
     <label className="field"><span>Vault name</span><input autoFocus autoComplete="off" disabled={isSaving} maxLength={80} onChange={(event) => setName(event.target.value)} required value={name} /></label>
     {error && <p className="unlock-error" role="alert">{error}</p>}
     <div className="confirm-dialog-actions"><button className="button button-secondary" disabled={isSaving} onClick={onCancel} type="button">Cancel</button><button className="button button-primary" disabled={isSaving || !name.trim() || (name.trim() === currentName && !error)} type="submit">{isSaving ? 'Renaming…' : 'Rename vault'}</button></div>
+  </form></DialogShell>
+}
+
+function DuplicateVaultDialog({ currentName, isSaving, error, onCancel, onSave }: {
+  currentName: string
+  isSaving: boolean
+  error: string
+  onCancel: () => void
+  onSave: (name: string) => void
+}) {
+  const [name, setName] = useState(`${currentName} copy`)
+  return <DialogShell describedBy="duplicate-vault-description" labelledBy="duplicate-vault-title" locked={isSaving} onCancel={onCancel}><form className="confirm-dialog-card" onSubmit={(event) => { event.preventDefault(); onSave(name) }}>
+    <div className="confirm-dialog-copy"><p className="eyebrow">Vault settings</p><h2 id="duplicate-vault-title">Duplicate vault</h2><p id="duplicate-vault-description">Create a separate encrypted copy of {currentName} in Dropbox. The original stays unchanged. The copy starts with the same master password, which you can change after opening it.</p></div>
+    <label className="field"><span>New vault name</span><input autoFocus autoComplete="off" disabled={isSaving} maxLength={80} onChange={(event) => setName(event.target.value)} required value={name} /></label>
+    {error && <p className="unlock-error" role="alert">{error}</p>}
+    <div className="confirm-dialog-actions"><button className="button button-secondary" disabled={isSaving} onClick={onCancel} type="button">Cancel</button><button className="button button-primary" disabled={isSaving || !name.trim()} type="submit">{isSaving ? 'Duplicating…' : 'Duplicate vault'}</button></div>
   </form></DialogShell>
 }
 
@@ -248,7 +265,7 @@ function MoveEntriesDialog({ entries, vault, openVaultTargets, isMoving, error, 
   </form></DialogShell>
 }
 
-export function VaultBrowser({ vault, vaultId, canEdit, onChangeVaultPassword, onDeleteEntry, onDeleteEntriesForever, onDeleteGroup, onEntryDragEnd, onEntryDragStart, onLoadEntry, onLock, onMoveEntry, onMoveEntries, onDropEntryOnVault, onReadProtectedField, onRenameVault, onSaveEntry, onSaveGroup, onVaultDropTargetChange, openVaultMoveTargets }: VaultBrowserProps) {
+export function VaultBrowser({ vault, vaultId, canEdit, onChangeVaultPassword, onDeleteEntry, onDeleteEntriesForever, onDeleteGroup, onEntryDragEnd, onEntryDragStart, onLoadEntry, onLock, onMoveEntry, onMoveEntries, onDropEntryOnVault, onReadProtectedField, onRenameVault, onDuplicateVault, onSaveEntry, onSaveGroup, onVaultDropTargetChange, openVaultMoveTargets }: VaultBrowserProps) {
   const activeEntries = useMemo(() => vault.entries.filter((entry) => !entry.isDeleted), [vault.entries])
   const unfiledEntries = useMemo(() => activeEntries.filter((entry) => entry.groupId === vault.rootGroupId), [activeEntries, vault.rootGroupId])
   const activeGroups = useMemo(() => vault.groups.filter((group) => !group.isRecycleBin), [vault.groups])
@@ -289,6 +306,9 @@ export function VaultBrowser({ vault, vaultId, canEdit, onChangeVaultPassword, o
   const [renameDialogOpen, setRenameDialogOpen] = useState(false)
   const [isRenaming, setIsRenaming] = useState(false)
   const [renameError, setRenameError] = useState('')
+  const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false)
+  const [isDuplicating, setIsDuplicating] = useState(false)
+  const [duplicateError, setDuplicateError] = useState('')
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false)
   const [isChangingVaultPassword, setIsChangingVaultPassword] = useState(false)
   const [vaultPasswordError, setVaultPasswordError] = useState('')
@@ -642,6 +662,19 @@ export function VaultBrowser({ vault, vaultId, canEdit, onChangeVaultPassword, o
     }
   }
 
+  async function duplicateVault(name: string) {
+    setIsDuplicating(true)
+    setDuplicateError('')
+    try {
+      await onDuplicateVault(name)
+      setDuplicateDialogOpen(false)
+    } catch (error) {
+      setDuplicateError(error instanceof Error ? error.message : 'The vault could not be duplicated safely.')
+    } finally {
+      setIsDuplicating(false)
+    }
+  }
+
   async function changeVaultPassword(currentPassword: string, newPassword: string) {
     setIsChangingVaultPassword(true)
     setVaultPasswordError('')
@@ -824,7 +857,7 @@ export function VaultBrowser({ vault, vaultId, canEdit, onChangeVaultPassword, o
   const entryWidthMax = Math.max(entryColumnMinWidth, Math.round(gridWidth - folderColumnMinWidth - detailColumnMinWidth - columnResizeHandleWidth * 2))
 
   return <div className="vault-browser">
-    <header className="vault-browser-header"><div className="vault-browser-title"><div className="vault-browser-name-row"><h1>{vault.databaseName}</h1>{canEdit && <button aria-label="Rename vault" className="vault-name-action" disabled={isRenaming || isDeleting || isChangingVaultPassword} onClick={() => { setRenameError(''); setRenameDialogOpen(true) }} title="Rename vault" type="button"><Pencil aria-hidden="true" size={15} /></button>}</div><p className="vault-browser-meta"><span>KDBX {vault.version}</span><span>{activeEntries.length} {activeEntries.length === 1 ? 'entry' : 'entries'}</span><span>Decrypted in memory</span></p></div><div className="vault-browser-actions">{canEdit && <button aria-label="Change vault password" className="button button-secondary button-icon" disabled={isChangingVaultPassword || isRenaming} onClick={() => { setVaultPasswordError(''); setPasswordDialogOpen(true) }} title="Change vault password" type="button"><KeyRound aria-hidden="true" /></button>}<button aria-label="Lock vault" className="button button-secondary button-icon" disabled={isChangingVaultPassword} onClick={onLock} title="Lock vault" type="button"><LockKeyhole aria-hidden="true" /></button></div></header>
+    <header className="vault-browser-header"><div className="vault-browser-title"><div className="vault-browser-name-row"><h1>{vault.databaseName}</h1>{canEdit && <button aria-label="Rename vault" className="vault-name-action" disabled={isRenaming || isDeleting || isChangingVaultPassword || isDuplicating} onClick={() => { setRenameError(''); setRenameDialogOpen(true) }} title="Rename vault" type="button"><Pencil aria-hidden="true" size={15} /></button>}</div><p className="vault-browser-meta"><span>KDBX {vault.version}</span><span>{activeEntries.length} {activeEntries.length === 1 ? 'entry' : 'entries'}</span><span>Decrypted in memory</span></p></div><div className="vault-browser-actions">{canEdit && <button aria-label="Duplicate vault" className="button button-secondary button-icon" disabled={isDuplicating || isRenaming || isChangingVaultPassword} onClick={() => { setDuplicateError(''); setDuplicateDialogOpen(true) }} title="Duplicate vault" type="button"><Copy aria-hidden="true" /></button>}{canEdit && <button aria-label="Change vault password" className="button button-secondary button-icon" disabled={isChangingVaultPassword || isRenaming || isDuplicating} onClick={() => { setVaultPasswordError(''); setPasswordDialogOpen(true) }} title="Change vault password" type="button"><KeyRound aria-hidden="true" /></button>}<button aria-label="Lock vault" className="button button-secondary button-icon" disabled={isChangingVaultPassword || isDuplicating} onClick={onLock} title="Lock vault" type="button"><LockKeyhole aria-hidden="true" /></button></div></header>
     {!canEdit && <p className="read-only-note">This device file is open read only. Connect and open its Dropbox copy to add or edit entries.</p>}
     <div className="vault-browser-grid" ref={vaultGridRef} style={columnWidths ? { gridTemplateColumns: `${columnWidths.folders}px ${columnResizeHandleWidth}px ${columnWidths.entries}px ${columnResizeHandleWidth}px minmax(${detailColumnMinWidth}px, 1fr)` } : undefined}>
       <aside className="group-list" aria-label="Vault folders" ref={folderColumnRef}>
@@ -980,6 +1013,7 @@ export function VaultBrowser({ vault, vaultId, canEdit, onChangeVaultPassword, o
     {groupDialog && <GroupNameDialog error={groupError} group={groupDialog === 'new' ? null : groupDialog} isSaving={isSavingGroup} onCancel={() => { if (!isSavingGroup) { setGroupError(''); setGroupDialog(null) } }} onSave={(group) => void saveGroup(group)} rootGroupId={vault.rootGroupId} />}
     {groupToDelete && <DeleteGroupDialog error={groupError} group={groupToDelete} isDeleting={isSavingGroup} onCancel={() => { if (!isSavingGroup) { setGroupError(''); setGroupToDelete(null) } }} onDelete={() => void deleteGroup()} />}
     {renameDialogOpen && <RenameVaultDialog currentName={vault.databaseName} error={renameError} isSaving={isRenaming} onCancel={() => { if (!isRenaming) { setRenameError(''); setRenameDialogOpen(false) } }} onSave={(name) => void renameVault(name)} />}
+    {duplicateDialogOpen && <DuplicateVaultDialog currentName={vault.databaseName} error={duplicateError} isSaving={isDuplicating} onCancel={() => { if (!isDuplicating) { setDuplicateError(''); setDuplicateDialogOpen(false) } }} onSave={(name) => void duplicateVault(name)} />}
     {passwordDialogOpen && <ChangeVaultPasswordDialog error={vaultPasswordError} isSaving={isChangingVaultPassword} onCancel={() => { if (!isChangingVaultPassword) { setVaultPasswordError(''); setPasswordDialogOpen(false) } }} onSave={(currentPassword, newPassword) => void changeVaultPassword(currentPassword, newPassword)} vaultName={vault.databaseName} />}
   </div>
 }

@@ -846,6 +846,26 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
     return renamedSnapshot
   }
 
+  async function duplicateOpenVault(name: string) {
+    const session = vaultSessionRef.current
+    const source = activeDropboxVault
+    if (!session || !source || selectedStorage !== 'dropbox') {
+      throw new Error('Open this vault from Dropbox before duplicating it.')
+    }
+
+    const databaseName = name.trim()
+    const fileName = toVaultFileName(databaseName)
+    if (dropbox.vaults.some((vault) => vault.name.localeCompare(fileName, undefined, { sensitivity: 'accent' }) === 0)) {
+      throw new Error(`A vault named ${fileName.replace(/\.kdbx$/i, '')} already exists in Dropbox.`)
+    }
+
+    // The worker creates a separately encrypted KDBX with renamed metadata.
+    // Upload uses Dropbox's add-only mode, so neither source nor an existing
+    // destination can be overwritten.
+    const file = await session.duplicateVault(databaseName, fileName)
+    await dropbox.upload(file)
+  }
+
   async function moveVaultEntry(entryId: string, groupId: string) {
     const session = vaultSessionRef.current
     if (!session) throw new Error('The vault is locked. Open it again before moving an entry.')
@@ -1239,6 +1259,7 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
               onDeleteEntriesForever={deleteVaultEntriesForever}
               onDeleteGroup={deleteVaultGroup}
               onDeleteEntry={deleteVaultEntry}
+              onDuplicateVault={duplicateOpenVault}
               onLoadEntry={(entryId) => {
                 const session = vaultSessionRef.current
                 return session ? session.getEntry(entryId) : Promise.reject(new Error('The vault is locked. Open it again before editing an entry.'))

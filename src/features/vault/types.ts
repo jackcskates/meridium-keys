@@ -121,6 +121,7 @@ export type VaultWorkerRequest =
   | { type: 'prepare-group-save'; group: VaultGroupDraft; requestId: string }
   | { type: 'prepare-group-delete'; groupId: string; requestId: string }
   | { type: 'prepare-vault-rename'; databaseName: string; fileName: string; requestId: string }
+  | { type: 'duplicate-vault'; databaseName: string; fileName: string; requestId: string }
   | { type: 'prepare-vault-password-change'; currentPassword: string; newPassword: string; requestId: string }
   | { type: 'finish-change'; changeId: string; commit: boolean; requestId: string }
 
@@ -128,6 +129,7 @@ export type VaultWorkerResponse =
   | { type: 'progress'; stage: 'reading' | 'decrypting' | 'mapping' | 'creating' | 'encrypting' }
   | { type: 'success'; vault: VaultSnapshot }
   | { type: 'created'; data: ArrayBuffer; fileName: string }
+  | { type: 'duplicated'; data: ArrayBuffer; fileName: string; requestId: string }
   | { type: 'entry'; entry: VaultEntryDetails; requestId: string }
   | { type: 'entry-transfer'; entry: VaultTransferEntry; requestId: string }
   | { type: 'entries-transfer'; entries: VaultTransferEntry[]; requestId: string }
