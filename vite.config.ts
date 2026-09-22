@@ -12,7 +12,7 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
+      registerType: 'prompt',
       includeAssets: ['meridium-mark.svg', 'apple-touch-icon-v3.png', 'icon-192x192-v3.png', 'icon-512x512-v3.png', 'icon-1024x1024-v3.png', 'icon-192x192-maskable-v3.png', 'icon-512x512-maskable-v3.png', 'icon-1024x1024-maskable-v3.png'],
       manifest: {
         id: '/',
@@ -37,11 +37,11 @@ export default defineConfig({
         ],
       },
       workbox: {
-        clientsClaim: true,
+        clientsClaim: false,
         cleanupOutdatedCaches: true,
         navigateFallback: '/index.html',
         runtimeCaching: [],
-        skipWaiting: true,
+        skipWaiting: false,
       },
     }),
   ],

@@ -156,7 +156,7 @@ function DeleteVaultDialog({ vault, isDeleting, error, onCancel, onDelete }: {
   )
 }
 
-function UpdatePrompt() {
+function UpdatePrompt({ hasUnlockedVaults = false }: { hasUnlockedVaults?: boolean }) {
   const [registration, setRegistration] = useState<ServiceWorkerRegistration | null>(null)
   const [hasWaitingWorker, setHasWaitingWorker] = useState(false)
   const {
@@ -215,9 +215,9 @@ function UpdatePrompt() {
     <div className="update-toast" role="status">
       <div>
         <strong>Update ready</strong>
-        <span>Lock open vaults before updating.</span>
+        <span>{hasUnlockedVaults ? 'Lock all open vaults before updating.' : 'Ready to install.'}</span>
       </div>
-      <button className="button button-small" onClick={() => updateServiceWorker(true)} type="button">Update</button>
+      <button className="button button-small" disabled={hasUnlockedVaults} onClick={() => updateServiceWorker(true)} type="button">Update</button>
     </div>
   )
 }
@@ -1240,7 +1240,7 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
         targetName={dropbox.vaults.find((vault) => vault.id === transferRequest.targetVaultId)?.name.replace(/\.kdbx$/i, '') || 'the destination vault'}
       />}
       <InstallPrompt canPromptInstall={pwa.canPromptInstall} install={pwa.install} isIos={pwa.isIos} isStandalone={pwa.isStandalone} />
-      <UpdatePrompt />
+      <UpdatePrompt hasUnlockedVaults={Boolean(vaultSnapshot) || Object.keys(openDropboxVaultSnapshots).length > 0} />
     </div>
   )
 }

@@ -5,6 +5,7 @@ const root = resolve(import.meta.dirname, '..')
 const dist = resolve(root, 'dist')
 const manifest = JSON.parse(await readFile(resolve(dist, 'manifest.webmanifest'), 'utf8'))
 const html = await readFile(resolve(dist, 'index.html'), 'utf8')
+const serviceWorker = await readFile(resolve(dist, 'sw.js'), 'utf8')
 
 const assert = (condition, message) => {
   if (!condition) throw new Error(`PWA verification failed: ${message}`)
@@ -26,6 +27,9 @@ assert(html.includes('viewport-fit=cover'), 'safe-area viewport support is missi
 assert(html.includes('apple-mobile-web-app-capable'), 'iOS standalone metadata is missing')
 assert(html.includes('apple-touch-icon-v3.png'), 'Apple touch icon is not cache-busted')
 assert(html.includes('favicon-v3.svg'), 'browser icon is not canonical or cache-busted')
+assert(serviceWorker.includes('SKIP_WAITING'), 'updates must wait for an explicit user action')
+assert((serviceWorker.match(/self\.skipWaiting\(\)/g) || []).length === 1, 'service worker must not activate automatically')
+assert(!serviceWorker.includes('clientsClaim()'), 'service worker must not claim an unlocked page automatically')
 
 await Promise.all([
   access(resolve(dist, 'sw.js')),
