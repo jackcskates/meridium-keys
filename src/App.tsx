@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRegisterSW } from 'virtual:pwa-register/react'
-import { verifyAppPassword } from './features/app-lock/verifyAppPassword'
+import { appPasswordIsConfigured, clearAppPassword, configureAppPassword, verifyAppPassword } from './features/app-lock/verifyAppPassword'
+import { forgetDropboxRefreshToken } from './features/dropbox/credentialStore'
 import type { DropboxVaultFile } from './features/dropbox/types'
 import { useDropbox } from './features/dropbox/useDropbox'
 import { usePwaLifecycle } from './features/pwa/usePwaLifecycle'
@@ -228,9 +229,79 @@ function BrandMark({ className = '' }: { className?: string }) {
   )
 }
 
-function AppLock({ onUnlock }: { onUnlock: () => void }) {
+function ResetAppLockDialog({ isResetting, onCancel, onReset }: {
+  isResetting: boolean
+  onCancel: () => void
+  onReset: () => void
+}) {
+  const dialogRef = useRef<HTMLDialogElement>(null)
+  useEffect(() => {
+    const dialog = dialogRef.current
+    dialog?.showModal()
+    return () => { if (dialog?.open) dialog.close() }
+  }, [])
+
+  return <dialog aria-describedby="reset-app-lock-description" aria-labelledby="reset-app-lock-title" className="confirm-dialog" onCancel={(event) => { event.preventDefault(); if (!isResetting) onCancel() }} ref={dialogRef}><div className="confirm-dialog-card">
+    <span className="confirm-dialog-icon"><Icon name="refresh" size={24} /></span>
+    <div className="confirm-dialog-copy"><p className="eyebrow">This device</p><h2 id="reset-app-lock-title">Reset App Lock?</h2><p id="reset-app-lock-description">This removes the device’s App Lock and saved Dropbox connection. It does not delete any encrypted vault from Dropbox. You will set a new App Lock and reconnect Dropbox.</p></div>
+    <div className="confirm-dialog-actions"><button className="button button-secondary" disabled={isResetting} onClick={onCancel} type="button">Cancel</button><button className="button button-danger" disabled={isResetting} onClick={onReset} type="button">{isResetting ? 'Resetting…' : 'Reset this device'}</button></div>
+  </div></dialog>
+}
+
+function AppLockSetup({ onComplete }: { onComplete: () => void }) {
+  const [showPassword, setShowPassword] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [error, setError] = useState('')
+  const passwordInputRef = useRef<HTMLInputElement>(null)
+  const confirmationInputRef = useRef<HTMLInputElement>(null)
+
+  async function save() {
+    const passwordInput = passwordInputRef.current
+    const confirmationInput = confirmationInputRef.current
+    if (!passwordInput || !confirmationInput) return
+    if (passwordInput.value !== confirmationInput.value) {
+      setError('The app passwords must match.')
+      confirmationInput.focus()
+      confirmationInput.select()
+      return
+    }
+    setIsSaving(true)
+    setError('')
+    try {
+      await configureAppPassword(passwordInput.value)
+      passwordInput.value = ''
+      confirmationInput.value = ''
+      onComplete()
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : 'This device could not configure App Lock.')
+      passwordInput.focus()
+      passwordInput.select()
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  return <div className="app-frame app-lock-frame">
+    <header className="app-lock-brand"><BrandMark /><span><strong>Meridium</strong><small>Keys</small></span></header>
+    <main className="app-lock-stage"><div aria-labelledby="app-lock-setup-title" className="focus-card app-lock-card" onKeyDown={(event) => { if (event.key === 'Enter' && !event.nativeEvent.isComposing) { event.preventDefault(); void save() } }} role="form">
+      <div className="security-emblem"><Icon name="shield" size={31} /></div>
+      <div className="card-copy"><p className="eyebrow">Secure this device</p><h1 id="app-lock-setup-title">Create your App Lock</h1><p className="lede">Set the password that opens this Keys installation. It is separate from every KDBX vault password.</p></div>
+      <label className="field"><span>New app password</span><div className="secret-input"><input autoCapitalize="none" autoComplete="off" autoCorrect="off" autoFocus disabled={isSaving} minLength={12} ref={passwordInputRef} required spellCheck={false} type={showPassword ? 'text' : 'password'} /><button aria-label={showPassword ? 'Hide app password' : 'Show app password'} onClick={() => setShowPassword((current) => !current)} type="button"><Icon name={showPassword ? 'eye-off' : 'eye'} /></button></div><small>Use at least 12 characters.</small></label>
+      <label className="field"><span>Confirm app password</span><input autoCapitalize="none" autoComplete="off" autoCorrect="off" disabled={isSaving} minLength={12} ref={confirmationInputRef} required spellCheck={false} type={showPassword ? 'text' : 'password'} /></label>
+      <p className="field-note">This verifier stays on this device and does not sync. You may choose the same App Lock separately on your other devices.</p>
+      {error && <p className="unlock-error" role="alert">{error}</p>}
+      <button className="button button-primary button-wide" disabled={isSaving} onClick={() => void save()} type="button"><Icon name="key" />{isSaving ? 'Securing…' : 'Set App Lock'}</button>
+      <p className="app-build">Build {__APP_BUILD_ID__}</p>
+    </div></main>
+    <UpdatePrompt />
+  </div>
+}
+
+function AppLock({ onReset, onUnlock }: { onReset: () => Promise<void>; onUnlock: () => void }) {
   const [showPassword, setShowPassword] = useState(false)
   const [isChecking, setIsChecking] = useState(false)
+  const [isResetting, setIsResetting] = useState(false)
+  const [resetOpen, setResetOpen] = useState(false)
   const [error, setError] = useState('')
   const passwordInputRef = useRef<HTMLInputElement>(null)
 
@@ -282,9 +353,12 @@ function AppLock({ onUnlock }: { onUnlock: () => void }) {
           <p className="field-note">Use the Meridium Keys app password, not a vault’s separate master password.</p>
           {error && <p className="unlock-error" role="alert">{error}</p>}
           <button className="button button-primary button-wide" disabled={isChecking} onClick={() => void unlock()} type="button"><Icon name="key" />{isChecking ? 'Checking…' : 'Unlock app'}</button>
+          <button className="text-button" disabled={isChecking} onClick={() => setResetOpen(true)} type="button">Reset App Lock on this device</button>
+          <p className="app-build">Build {__APP_BUILD_ID__}</p>
         </div>
       </main>
       <UpdatePrompt />
+      {resetOpen && <ResetAppLockDialog isResetting={isResetting} onCancel={() => { if (!isResetting) setResetOpen(false) }} onReset={() => { setIsResetting(true); void onReset().finally(() => setIsResetting(false)) }} />}
     </div>
   )
 }
@@ -920,6 +994,7 @@ const appLockSessionKey = 'meridium-keys-app-unlocked'
 
 function App() {
   const [isUnlocked, setIsUnlocked] = useState(() => sessionStorage.getItem(appLockSessionKey) === 'true')
+  const [hasAppPassword, setHasAppPassword] = useState(appPasswordIsConfigured)
 
   function unlockApp() {
     sessionStorage.setItem(appLockSessionKey, 'true')
@@ -931,7 +1006,17 @@ function App() {
     setIsUnlocked(false)
   }
 
-  return isUnlocked ? <KeysWorkspace onLockApp={lockApp} /> : <AppLock onUnlock={unlockApp} />
+  async function resetAppLock() {
+    sessionStorage.removeItem(appLockSessionKey)
+    clearAppPassword()
+    await forgetDropboxRefreshToken().catch(() => undefined)
+    setIsUnlocked(false)
+    setHasAppPassword(false)
+  }
+
+  if (isUnlocked) return <KeysWorkspace onLockApp={lockApp} />
+  if (!hasAppPassword) return <AppLockSetup onComplete={() => { setHasAppPassword(true); unlockApp() }} />
+  return <AppLock onReset={resetAppLock} onUnlock={unlockApp} />
 }
 
 export default App

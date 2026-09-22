@@ -55,7 +55,7 @@ export async function beginDropboxAuthorization() {
   const redirectUri = getDropboxRedirectUri()
   const challenge = await createChallenge(verifier)
   const transaction: OAuthTransaction = { state, verifier, redirectUri, createdAt: Date.now() }
-  sessionStorage.setItem(transactionKey, JSON.stringify(transaction))
+  localStorage.setItem(transactionKey, JSON.stringify(transaction))
 
   const query = new URLSearchParams({
     client_id: dropboxAppKey,
@@ -78,8 +78,8 @@ async function exchangeCallback(): Promise<DropboxSession | null> {
   if (!code && !oauthError) return null
 
   clearCallbackQuery()
-  const stored = sessionStorage.getItem(transactionKey)
-  sessionStorage.removeItem(transactionKey)
+  const stored = localStorage.getItem(transactionKey)
+  localStorage.removeItem(transactionKey)
 
   if (oauthError) throw new DropboxAuthError('Dropbox authorization was cancelled or denied.')
   if (!stored || !code || !returnedState) {

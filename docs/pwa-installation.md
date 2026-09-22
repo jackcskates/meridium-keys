@@ -47,11 +47,11 @@ be added only after the per-device App Lock envelope is implemented.
 - Online and offline changes update the Dropbox status immediately.
 - After one device authorization, launch and reload automatically restore the
   Dropbox library from the encrypted refresh credential. Sign out removes it.
-- Service-worker updates wait for user approval; the interface asks the user to
-  lock open vaults before applying an update. The app checks at launch, when it
-  regains focus, when a page is restored or connectivity returns, and every 60
-  seconds while it remains open. An already-waiting worker also surfaces the
-  prompt even if its original update callback was missed.
+- Service-worker updates activate automatically and claim the installed client,
+  avoiding a prompt-only dead end on iPhone. The app still checks at launch,
+  when it regains focus, when a page is restored or connectivity returns, and
+  every 60 seconds while it remains open. Access screens show the deployed
+  build identifier for direct stale-version diagnosis.
 - Phone layouts respect display cutouts and home-indicator safe areas.
 
 ## Verification

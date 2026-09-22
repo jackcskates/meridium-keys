@@ -356,6 +356,34 @@ they never existed; mark them superseded and link to the replacement.
   and field-heavy records. Adjustable panes let the working surface match the
   current task without compromising touch layouts or persisting vault content.
 
+### D-042 - Device-configured App Lock
+
+- **Status:** Accepted as the temporary App Lock model
+- **Decision:** Remove the precomputed global App Lock verifier. Each browser or
+  installed PWA creates and confirms its own App Lock password, then stores only
+  a random salt, PBKDF2 work factor, and verifier on that device. A reset removes
+  both the device verifier and its saved Dropbox authorization, but never a
+  Dropbox vault. Display the production build identifier on access screens.
+- **Reason:** A hard-coded verifier had no supported setup, acceptance test,
+  migration, or recovery path and repeatedly rejected the intended credential
+  on iPhone. Device-side enrollment makes the verified value explicit without
+  committing or transmitting the plaintext password.
+- **Limitation:** This remains a casual device gate with offline-guessing and
+  same-origin limitations. Supabase or another reviewed identity provider would
+  be a separate account-access boundary, not a replacement for KDBX encryption.
+
+### D-043 - iPhone PWA update and Dropbox return reliability
+
+- **Status:** Accepted
+- **Decision:** Activate new service workers automatically with `skipWaiting`
+  and `clientsClaim`, while retaining versioned application-shell precaching.
+  Persist the short-lived Dropbox PKCE transaction in origin-local storage
+  instead of session storage, remove it immediately on callback, and continue
+  enforcing state, redirect URI, and ten-minute expiry checks.
+- **Reason:** iPhone standalone navigation can replace or restore browsing
+  sessions during an OAuth round trip, and prompt-only service-worker updates
+  can leave an installed app on broken code without a visible update action.
+
 ## Open
 
 ### D-005 - Standard KDBX compatibility

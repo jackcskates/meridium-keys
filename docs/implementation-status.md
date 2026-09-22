@@ -1,25 +1,29 @@
 # Implementation Status
 
-Last verified: 2026-09-21.
+Last verified: 2026-09-22.
 
 ## Working now
 
 - Local Vite, React, and TypeScript development environment.
 - Installable PWA shell with offline application assets, regular and maskable
   Meridium icons, iOS standalone metadata, native Chromium install prompting,
-  iPhone/iPad installation guidance, and an explicit update prompt. Installed
-  clients check for a new service worker at launch, when returning to the
+  iPhone/iPad installation guidance, and automatic service-worker activation.
+  Installed clients check for a new worker at launch, when returning to the
   foreground, when connectivity returns, when a page is restored, and every 60
-  seconds while open. The prompt also detects a worker that was already waiting.
+  seconds while open.
 - Phone install icons now use the same approximately 70-percent Meridium-mark
   scale as desktop icons, with cache-busted manifest and Apple touch references.
 - Phone safe-area handling plus live online/offline Dropbox status and automatic
   Dropbox session restoration after the user authorizes the device once.
-- Temporary session App Lock with a slow PBKDF2 verifier and explicit Lock App
-  action. The plaintext app password is not committed.
+- Device-configured session App Lock with a random salt, slow PBKDF2 verifier,
+  explicit Lock App action, and confirmed device-reset path. The plaintext app
+  password is never committed, persisted, or transmitted. Reset removes the
+  saved Dropbox authorization on that device without deleting remote vaults.
 - Mobile-safe App Lock input disables capitalization and correction, accepts
   accidental whitespace around a pasted value, retains failed input for
   correction, and distinguishes the app password from vault master passwords.
+- Access screens display the deployed build identifier so an installed iPhone
+  PWA can be distinguished from stale application code.
 - Vault master-password fields disable iOS capitalization, correction, spelling,
   and site-password autofill even while revealed. Failed unlock attempts retain
   the entered value for inspection and correction while preserving byte-exact

@@ -2,12 +2,17 @@ import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
+const buildId = process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7)
+  || process.env.GITHUB_SHA?.slice(0, 7)
+  || `local-${new Date().toISOString().replaceAll(/[-:.TZ]/g, '').slice(0, 12)}`
+
 // https://vite.dev/config/
 export default defineConfig({
+  define: { __APP_BUILD_ID__: JSON.stringify(buildId) },
   plugins: [
     react(),
     VitePWA({
-      registerType: 'prompt',
+      registerType: 'autoUpdate',
       includeAssets: ['meridium-mark.svg', 'apple-touch-icon-v3.png', 'icon-192x192-v3.png', 'icon-512x512-v3.png', 'icon-1024x1024-v3.png', 'icon-192x192-maskable-v3.png', 'icon-512x512-maskable-v3.png', 'icon-1024x1024-maskable-v3.png'],
       manifest: {
         id: '/',
@@ -36,6 +41,7 @@ export default defineConfig({
         cleanupOutdatedCaches: true,
         navigateFallback: '/index.html',
         runtimeCaching: [],
+        skipWaiting: true,
       },
     }),
   ],

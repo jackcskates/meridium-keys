@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { dropboxAppKey } from './config'
 import { beginDropboxAuthorization, completeDropboxAuthorization, refreshDropboxAuthorization } from './oauth'
 
-function createSessionStorage() {
+function createStorage() {
   const values = new Map<string, string>()
   return {
     getItem: (key: string) => values.get(key) ?? null,
@@ -20,7 +20,7 @@ describe('Dropbox PKCE authorization', () => {
   it('creates and completes a verified client-only authorization transaction', async () => {
     const assign = vi.fn()
     const replaceState = vi.fn()
-    const storage = createSessionStorage()
+    const storage = createStorage()
     const location = {
       origin: 'https://keys.meridium.app',
       pathname: '/',
@@ -31,7 +31,7 @@ describe('Dropbox PKCE authorization', () => {
     vi.stubGlobal('window', { location })
     vi.stubGlobal('history', { replaceState })
     vi.stubGlobal('document', { title: 'Meridium Keys' })
-    vi.stubGlobal('sessionStorage', storage)
+    vi.stubGlobal('localStorage', storage)
 
     await beginDropboxAuthorization()
 

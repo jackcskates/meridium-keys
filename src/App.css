@@ -422,6 +422,14 @@
 .app-lock-card { width: min(100%, 460px); align-items: center; text-align: center; }
 .app-lock-card .field { width: 100%; text-align: left; }
 
+.app-build {
+  margin: -2px 0 0;
+  color: var(--text-tertiary);
+  font-family: var(--font-system);
+  font-size: 0.64rem;
+  letter-spacing: 0.04em;
+}
+
 .secure-pill {
   display: inline-flex;
   align-items: center;

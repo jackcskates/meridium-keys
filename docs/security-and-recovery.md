@@ -7,11 +7,16 @@ required before production use.
 
 ### Temporary application lock
 
-The current PWA requires an app password once per browser/PWA session. Source
-contains only a salted PBKDF2-SHA-256 verifier; the plaintext password is not
-committed. Successful unlock is remembered in `sessionStorage`, and explicit
-App Lock removes that flag and unmounts the Dropbox/vault workspace so its
-memory-only session data is released.
+The current PWA requires a device-configured app password once per browser/PWA
+session. The first launch creates a random salt and PBKDF2-SHA-256 verifier on
+that device; the plaintext password is not persisted, committed, or transmitted.
+Successful unlock is remembered in `sessionStorage`, and explicit App Lock
+removes that flag and unmounts the Dropbox/vault workspace so its memory-only
+session data is released. App Lock does not sync between devices.
+
+Resetting App Lock removes the local verifier and saved Dropbox refresh token,
+then returns the installation to first-run setup. It does not delete encrypted
+vaults from Dropbox.
 
 The App Lock field disables mobile capitalization, autocorrection, and spelling
 changes. Accidental leading or trailing whitespace from paste is ignored for

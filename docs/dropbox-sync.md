@@ -17,6 +17,9 @@ Music credentials, Swift-specific code, or media-library behavior.
 - The scoped Dropbox application uses App Folder access. Its physical account
   folder is `/Apps/Meridium Keys`; API paths are relative to that root.
 - Authorization uses code flow with PKCE S256 and no app secret.
+- The ten-minute PKCE transaction survives iPhone standalone full-page
+  navigation in origin-local storage and is deleted before the callback is
+  processed. State, redirect URI, and expiry are still checked before exchange.
 - The production redirect is `https://keys.meridium.app/`; the local redirect is
   `http://127.0.0.1:5175/`.
 - Authorization requests offline access. Short-lived access tokens remain
