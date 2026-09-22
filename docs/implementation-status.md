@@ -122,6 +122,12 @@ Last verified: 2026-09-22.
 - Move entries between real KDBX folders or back to “No folder” by dragging the
   dedicated handle with a mouse or touch pointer. A Move entry dialog provides
   the equivalent keyboard-accessible action. Recycle Bin is never a move target.
+- Open more than one Dropbox vault temporarily in separate in-memory workers,
+  switch between them from the sidebar, and drag a key onto another open vault.
+  The Copy-or-Move prompt imports the key into the destination root, preserving
+  standard, custom, protected, attachment, auto-type, custom-data, and custom-icon
+  content. Move sends the source to its Recycle Bin only after the destination's
+  revision-safe save succeeds; App Lock and sign-out close all sessions.
 - Folder navigation lists created folders first, followed by each entry stored
   outside a folder by name. The unfiled-entry area accepts drops, while Recycle
   Bin remains docked to the bottom when the folder list scrolls.

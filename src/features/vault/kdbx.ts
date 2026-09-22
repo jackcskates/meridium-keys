@@ -5,7 +5,9 @@ import {
   CryptoEngine,
   Int64,
   Kdbx,
+  KdbxBinaries,
   KdbxError,
+  KdbxUuid,
   ProtectedValue,
   VarDictionary,
   type KdbxEntry,
@@ -20,6 +22,7 @@ import type {
   VaultGroupSummary,
   VaultOpenErrorCode,
   VaultSnapshot,
+  VaultTransferEntry,
 } from './types'
 import { allTypedFieldDefinitions, entryTypeMetadataKey, entryTypeLabel, getEntryTypeDefinition, isVaultEntryType } from './entryTypes'
 
@@ -267,6 +270,102 @@ export function readKdbxEntryDetails(database: Kdbx, entryId: string): VaultEntr
     type,
     title: entryFieldText(entry, 'Title'),
     fields: Object.fromEntries(allTypedFieldDefinitions().map((field) => [field.key, entryFieldText(entry, field.storageKey)])),
+  }
+}
+
+export function exportKdbxEntryTransfer(database: Kdbx, entryId: string): VaultTransferEntry {
+  const entry = findEntry(database, entryId)
+  if (!entry?.parentGroup) throw new VaultOpenError('WORKER_FAILURE', 'That entry could not be found in the open vault.')
+
+  const fields = [...entry.fields.entries()].map(([name, value]) => ({
+    name,
+    value: value instanceof ProtectedValue ? value.getText() : value,
+    protected: value instanceof ProtectedValue,
+  }))
+  const attachments = [...entry.binaries.entries()].map(([name, binary]) => {
+    const value = KdbxBinaries.isKdbxBinaryWithHash(binary) ? binary.value : binary
+    const protectedValue = value instanceof ProtectedValue
+    const bytes = protectedValue ? value.getBinary() : new Uint8Array(value)
+    return {
+      name,
+      data: bytes.slice().buffer as ArrayBuffer,
+      protected: protectedValue,
+    }
+  })
+  const sourceCustomIcon = entry.customIcon ? database.meta.customIcons.get(entry.customIcon.toString()) : undefined
+
+  return {
+    title: entryFieldText(entry, 'Title').trim() || 'Untitled',
+    type: entryTypeFor(entry),
+    fields,
+    attachments,
+    icon: entry.icon,
+    foregroundColor: entry.fgColor,
+    backgroundColor: entry.bgColor,
+    overrideUrl: entry.overrideUrl,
+    tags: [...entry.tags],
+    qualityCheck: entry.qualityCheck,
+    autoType: {
+      enabled: entry.autoType.enabled,
+      obfuscation: entry.autoType.obfuscation,
+      defaultSequence: entry.autoType.defaultSequence,
+      items: entry.autoType.items.map((item) => ({ ...item })),
+    },
+    customData: entry.customData ? [...entry.customData.entries()].map(([key, item]) => ({ key, value: item.value, lastModified: item.lastModified?.getTime() })) : undefined,
+    customIcon: sourceCustomIcon ? { data: sourceCustomIcon.data.slice(0), name: sourceCustomIcon.name, lastModified: sourceCustomIcon.lastModified?.getTime() } : undefined,
+  }
+}
+
+export async function prepareKdbxEntryImport(database: Kdbx, transfer: VaultTransferEntry, fileName: string) {
+  try {
+    const clonedData = await database.save()
+    const workingDatabase = await Kdbx.load(clonedData, database.credentials)
+    const entry = workingDatabase.createEntry(workingDatabase.getDefaultGroup())
+    entry.fields.clear()
+    for (const field of transfer.fields) {
+      entry.fields.set(field.name, field.protected ? ProtectedValue.fromString(field.value) : field.value)
+    }
+    entry.fields.set('Title', transfer.title.trim() || 'Untitled')
+    entry.fields.set(entryTypeMetadataKey, transfer.type)
+    entry.icon = transfer.icon
+    entry.fgColor = transfer.foregroundColor
+    entry.bgColor = transfer.backgroundColor
+    entry.overrideUrl = transfer.overrideUrl
+    entry.tags = [...transfer.tags]
+    entry.qualityCheck = transfer.qualityCheck
+    if (transfer.autoType) entry.autoType = {
+      enabled: transfer.autoType.enabled,
+      obfuscation: transfer.autoType.obfuscation,
+      defaultSequence: transfer.autoType.defaultSequence,
+      items: transfer.autoType.items.map((item) => ({ ...item })),
+    }
+    entry.customData = transfer.customData ? new Map(transfer.customData.map((item) => [item.key, { value: item.value, lastModified: item.lastModified ? new Date(item.lastModified) : undefined }])) : undefined
+    if (transfer.customIcon) {
+      const customIconId = KdbxUuid.random()
+      workingDatabase.meta.customIcons.set(customIconId.toString(), {
+        data: transfer.customIcon.data.slice(0),
+        name: transfer.customIcon.name,
+        lastModified: transfer.customIcon.lastModified ? new Date(transfer.customIcon.lastModified) : undefined,
+      })
+      entry.customIcon = customIconId
+    }
+    entry.binaries.clear()
+    for (const attachment of transfer.attachments) {
+      const data = attachment.data.slice(0)
+      const value = attachment.protected ? ProtectedValue.fromBinary(data) : data
+      entry.binaries.set(attachment.name, await workingDatabase.binaries.add(value))
+    }
+    entry.times.update()
+
+    const data = await workingDatabase.save()
+    return {
+      database: workingDatabase,
+      data,
+      vault: mapKdbxSnapshot(workingDatabase, fileName),
+      entryId: entry.uuid.toString(),
+    }
+  } catch (error) {
+    throw mapKdbxError(error)
   }
 }
 

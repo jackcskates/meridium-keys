@@ -9,6 +9,7 @@ import type { VaultEntryDetails, VaultEntryDraft, VaultEntrySummary, VaultEntryT
 
 type VaultBrowserProps = {
   vault: VaultSnapshot
+  vaultId?: string
   canEdit: boolean
   onChangeEntriesType: (entryIds: string[], entryType: VaultEntryType) => Promise<VaultSnapshot>
   onDeleteEntry: (entryId: string) => Promise<VaultSnapshot>
@@ -18,12 +19,16 @@ type VaultBrowserProps = {
   onReadProtectedField: (entryId: string, fieldKey: string) => Promise<string>
   onLock: () => void
   onMoveEntry: (entryId: string, groupId: string) => Promise<{ entryId: string; vault: VaultSnapshot }>
+  onEntryDragStart?: (entry: VaultEntrySummary) => void
+  onEntryDragEnd?: () => void
+  onDropEntryOnVault?: (entryId: string, vaultId: string) => void
+  onVaultDropTargetChange?: (vaultId: string) => void
   onRenameVault: (name: string) => Promise<VaultSnapshot>
   onSaveEntry: (entry: VaultEntryDraft) => Promise<{ entryId: string; vault: VaultSnapshot }>
   onSaveGroup: (group: VaultGroupDraft) => Promise<{ groupId: string; vault: VaultSnapshot }>
 }
 
-const entryDragMime = 'application/x-meridium-vault-entry'
+export const entryDragMime = 'application/x-meridium-vault-entry'
 const columnWidthStorageKey = 'meridium-keys-vault-column-widths'
 
 type ResizedColumn = 'folders' | 'entries'
@@ -248,7 +253,7 @@ function MoveEntryDialog({ entry, vault, isMoving, error, onCancel, onMove }: {
   </form></DialogShell>
 }
 
-export function VaultBrowser({ vault, canEdit, onChangeEntriesType, onDeleteEntry, onDeleteEntriesForever, onDeleteGroup, onLoadEntry, onLock, onMoveEntry, onReadProtectedField, onRenameVault, onSaveEntry, onSaveGroup }: VaultBrowserProps) {
+export function VaultBrowser({ vault, vaultId, canEdit, onChangeEntriesType, onDeleteEntry, onDeleteEntriesForever, onDeleteGroup, onEntryDragEnd, onEntryDragStart, onLoadEntry, onLock, onMoveEntry, onDropEntryOnVault, onReadProtectedField, onRenameVault, onSaveEntry, onSaveGroup, onVaultDropTargetChange }: VaultBrowserProps) {
   const activeEntries = useMemo(() => vault.entries.filter((entry) => !entry.isDeleted), [vault.entries])
   const unfiledEntries = useMemo(() => activeEntries.filter((entry) => entry.groupId === vault.rootGroupId), [activeEntries, vault.rootGroupId])
   const activeGroups = useMemo(() => vault.groups.filter((group) => !group.isRecycleBin), [vault.groups])
@@ -307,7 +312,7 @@ export function VaultBrowser({ vault, canEdit, onChangeEntriesType, onDeleteEntr
   const [revealState, setRevealState] = useState<{ entryId: string; fieldKey: string; status: 'loading' | 'revealed' | 'error'; value: string; message: string } | null>(null)
   const revealRequestIdRef = useRef(0)
   const nativeDragEntryIdRef = useRef('')
-  const pointerDragRef = useRef<{ pointerId: number; entryId: string; targetGroupId: string } | null>(null)
+  const pointerDragRef = useRef<{ pointerId: number; entryId: string; targetGroupId: string; targetVaultId: string } | null>(null)
   const [columnWidths, setColumnWidths] = useState<ColumnWidths | null>(loadColumnWidths)
   const columnResizeRef = useRef<{ pointerId: number; column: ResizedColumn; startX: number; startWidths: ColumnWidths } | null>(null)
   const vaultGridRef = useRef<HTMLDivElement>(null)
@@ -710,6 +715,8 @@ export function VaultBrowser({ vault, canEdit, onChangeEntriesType, onDeleteEntr
     pointerDragRef.current = null
     setDraggedEntryId('')
     setDropTargetGroupId('')
+    onVaultDropTargetChange?.('')
+    onEntryDragEnd?.()
   }
 
   async function moveEntry(entryId: string, groupId: string) {
@@ -743,19 +750,35 @@ export function VaultBrowser({ vault, canEdit, onChangeEntriesType, onDeleteEntr
       event.preventDefault()
       return
     }
-    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.effectAllowed = 'copyMove'
     event.dataTransfer.setData(entryDragMime, entry.id)
     event.dataTransfer.setData('text/plain', entry.id)
     nativeDragEntryIdRef.current = entry.id
     setDraggedEntryId(entry.id)
+    onEntryDragStart?.(entry)
     setMoveStatus(`Moving ${entry.title}. Drop it on a folder.`)
   }
 
   function updatePointerTarget(clientX: number, clientY: number, entryId: string) {
+    const vaultElement = document.elementFromPoint(clientX, clientY)?.closest<HTMLElement>('[data-vault-drop-id]')
+    const targetVaultId = vaultElement?.dataset.vaultDropId || ''
+    if (targetVaultId && targetVaultId !== vaultId && onDropEntryOnVault) {
+      if (pointerDragRef.current) {
+        pointerDragRef.current.targetGroupId = ''
+        pointerDragRef.current.targetVaultId = targetVaultId
+      }
+      setDropTargetGroupId('')
+      onVaultDropTargetChange?.(targetVaultId)
+      return
+    }
+    onVaultDropTargetChange?.('')
     const element = document.elementFromPoint(clientX, clientY)?.closest<HTMLElement>('[data-folder-id]')
     const groupId = element?.dataset.folderId || ''
     const targetGroupId = canDropEntry(entryId, groupId) ? groupId : ''
-    if (pointerDragRef.current) pointerDragRef.current.targetGroupId = targetGroupId
+    if (pointerDragRef.current) {
+      pointerDragRef.current.targetGroupId = targetGroupId
+      pointerDragRef.current.targetVaultId = ''
+    }
     setDropTargetGroupId(targetGroupId)
   }
 
@@ -763,8 +786,9 @@ export function VaultBrowser({ vault, canEdit, onChangeEntriesType, onDeleteEntr
     if (!canEdit || isMovingEntry || entry.isDeleted || (event.pointerType === 'mouse' && event.button !== 0)) return
     event.preventDefault()
     event.currentTarget.setPointerCapture?.(event.pointerId)
-    pointerDragRef.current = { pointerId: event.pointerId, entryId: entry.id, targetGroupId: '' }
+    pointerDragRef.current = { pointerId: event.pointerId, entryId: entry.id, targetGroupId: '', targetVaultId: '' }
     setDraggedEntryId(entry.id)
+    onEntryDragStart?.(entry)
     setMoveStatus(`Moving ${entry.title}. Drop it on a folder.`)
     updatePointerTarget(event.clientX, event.clientY, entry.id)
   }
@@ -780,9 +804,10 @@ export function VaultBrowser({ vault, canEdit, onChangeEntriesType, onDeleteEntr
     const drag = pointerDragRef.current
     if (!drag || drag.pointerId !== event.pointerId) return
     event.preventDefault()
-    const { entryId, targetGroupId } = drag
+    const { entryId, targetGroupId, targetVaultId } = drag
     clearDragState()
-    if (targetGroupId) void moveEntry(entryId, targetGroupId)
+    if (targetVaultId) onDropEntryOnVault?.(entryId, targetVaultId)
+    else if (targetGroupId) void moveEntry(entryId, targetGroupId)
     else setMoveStatus('Move canceled. Drop entries on No folder or another folder.')
   }
 

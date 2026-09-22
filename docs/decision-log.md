@@ -410,6 +410,23 @@ they never existed; mark them superseded and link to the replacement.
   the utility column into a large search surface or decrypting additional
   protected fields.
 
+### D-046 - Temporary multi-vault migration transfers
+
+- **Status:** Accepted
+- **Decision:** Allow multiple Dropbox vaults to remain unlocked only in memory
+  for the current app session, each in its own worker. Dropping a key onto
+  another open vault prompts for Copy or Move and imports it into that vault's
+  root. Preserve standard, custom, protected, attachment, auto-type,
+  custom-data, and custom-icon content while assigning a new destination UUID.
+  For Move, commit the destination encrypted Dropbox revision first, then send
+  the source entry to its Recycle Bin. If source removal fails, retain both
+  copies and report the recoverable result. App Lock and sign-out terminate all
+  open workers.
+- **Reason:** Migration from a large imported 1Password vault is an occasional
+  gardening task. Temporary independent sessions provide a direct drag workflow
+  without normalizing the product around permanently open decrypted vaults or
+  risking source loss during a two-file operation.
+
 ## Open
 
 ### D-005 - Standard KDBX compatibility

@@ -41,6 +41,11 @@ future possibilities.
 - Drag entries between real folders or “No folder” with mouse or touch, with a
   keyboard-accessible Move entry dialog for the same operation. The Recycle Bin
   is not a valid drop destination.
+- Temporarily keep multiple Dropbox vaults unlocked in independent workers for
+  migration. Drag a key onto another open vault, choose Copy or Move, and add it
+  to the destination root. Move removes the source only after the destination
+  encrypted revision saves, using the source Recycle Bin rather than permanent
+  deletion. App Lock and sign-out close every open vault.
 - List created folders before individually named unfiled entries and keep the
   Recycle Bin docked at the bottom of the navigator.
 

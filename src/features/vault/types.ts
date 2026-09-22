@@ -37,6 +37,39 @@ export type VaultEntryDetails = VaultEntryDraft & {
   id: string
 }
 
+export type VaultTransferField = {
+  name: string
+  value: string
+  protected: boolean
+}
+
+export type VaultTransferAttachment = {
+  name: string
+  data: ArrayBuffer
+  protected: boolean
+}
+
+export type VaultTransferEntry = {
+  title: string
+  type: VaultEntryType
+  fields: VaultTransferField[]
+  attachments: VaultTransferAttachment[]
+  icon?: number
+  foregroundColor?: string
+  backgroundColor?: string
+  overrideUrl?: string
+  tags: string[]
+  qualityCheck?: boolean
+  autoType?: {
+    enabled: boolean
+    obfuscation: number
+    defaultSequence?: string
+    items: { window: string; keystrokeSequence: string }[]
+  }
+  customData?: { key: string; value?: string; lastModified?: number }[]
+  customIcon?: { data: ArrayBuffer; name?: string; lastModified?: number }
+}
+
 export type VaultGroupSummary = {
   id: string
   parentGroupId: string
@@ -75,7 +108,9 @@ export type VaultWorkerRequest =
   | { type: 'unlock'; file: File; password: string }
   | { type: 'create'; databaseName: string; fileName: string; password: string }
   | { type: 'get-entry'; entryId: string; requestId: string }
+  | { type: 'export-entry-transfer'; entryId: string; requestId: string }
   | { type: 'get-protected-field'; entryId: string; fieldKey: string; requestId: string }
+  | { type: 'prepare-entry-import'; entry: VaultTransferEntry; requestId: string }
   | { type: 'prepare-entry-save'; entry: VaultEntryDraft; requestId: string }
   | { type: 'prepare-entry-delete'; entryId: string; requestId: string }
   | { type: 'prepare-entries-permanent-delete'; entryIds: string[]; requestId: string }
@@ -91,6 +126,7 @@ export type VaultWorkerResponse =
   | { type: 'success'; vault: VaultSnapshot }
   | { type: 'created'; data: ArrayBuffer; fileName: string }
   | { type: 'entry'; entry: VaultEntryDetails; requestId: string }
+  | { type: 'entry-transfer'; entry: VaultTransferEntry; requestId: string }
   | { type: 'protected-field'; value: string; requestId: string }
   | { type: 'change-prepared'; changeId: string; data: ArrayBuffer; entryId?: string; groupId?: string; requestId: string; vault: VaultSnapshot }
   | { type: 'change-finished'; requestId: string; vault: VaultSnapshot }

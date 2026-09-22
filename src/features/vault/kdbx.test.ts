@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DOMParser as XmlDomParser, XMLSerializer as XmlSerializer } from '@xmldom/xmldom'
-import { Consts, Credentials, Kdbx, ProtectedValue } from 'kdbxweb'
-import { configureArgon2, createKdbxData, loadKdbxDatabase, prepareKdbxEntriesPermanentDelete, prepareKdbxEntriesTypeChange, prepareKdbxEntryDelete, prepareKdbxEntryMove, prepareKdbxEntrySave, prepareKdbxGroupDelete, prepareKdbxGroupSave, prepareKdbxVaultRename, readKdbxEntryDetails, readKdbxProtectedField, readKdbxSnapshot, VaultOpenError } from './kdbx'
+import { Consts, Credentials, Kdbx, KdbxBinaries, KdbxUuid, ProtectedValue } from 'kdbxweb'
+import { configureArgon2, createKdbxData, exportKdbxEntryTransfer, loadKdbxDatabase, prepareKdbxEntriesPermanentDelete, prepareKdbxEntriesTypeChange, prepareKdbxEntryDelete, prepareKdbxEntryImport, prepareKdbxEntryMove, prepareKdbxEntrySave, prepareKdbxGroupDelete, prepareKdbxGroupSave, prepareKdbxVaultRename, readKdbxEntryDetails, readKdbxProtectedField, readKdbxSnapshot, VaultOpenError } from './kdbx'
 import { changeEntryDraftType, createEmptyEntryDraft, entryTypeDefinitions } from './entryTypes'
 
 // kdbxweb uses browser-native XML APIs in production. Supply the current,
@@ -222,6 +222,47 @@ describe('readKdbxSnapshot', () => {
     expect(reopenedDetails.type).toBe('password')
     expect(reopenedDetails.fields.username).toBe('')
     expect(reopenedDetails.fields.password).toBe('keep-this-secret')
+  })
+
+  it('copies a complete entry into another vault root with protected custom fields and attachments', async () => {
+    const sourceData = await createKdbxData('Transfer Source', fixturePassword)
+    const source = await loadKdbxDatabase(sourceData, fixturePassword)
+    const created = await prepareKdbxEntrySave(source, {
+      groupId: source.getDefaultGroup().uuid.toString(),
+      type: 'login',
+      title: 'Transferred Login',
+      fields: { username: 'person@example.test', password: 'source-secret', url: 'https://example.test', notes: 'transfer note' },
+    }, 'source.kdbx')
+    const sourceEntry = [...created.database.getDefaultGroup().allEntries()].find((entry) => entry.uuid.toString() === created.entryId)
+    expect(sourceEntry).toBeDefined()
+    sourceEntry!.fields.set('Legacy Secret', ProtectedValue.fromString('legacy-value'))
+    const attachmentBytes = new TextEncoder().encode('attachment contents').buffer as ArrayBuffer
+    sourceEntry!.binaries.set('reference.txt', await created.database.binaries.add(attachmentBytes))
+    sourceEntry!.autoType.defaultSequence = '{USERNAME}{TAB}{PASSWORD}{ENTER}'
+    sourceEntry!.customData = new Map([['migration-label', { value: 'legacy import' }]])
+    const customIconId = KdbxUuid.random()
+    created.database.meta.customIcons.set(customIconId.toString(), { data: new Uint8Array([1, 2, 3, 4]).buffer as ArrayBuffer, name: 'Imported icon' })
+    sourceEntry!.customIcon = customIconId
+
+    const transfer = exportKdbxEntryTransfer(created.database, created.entryId)
+    const destinationData = await createKdbxData('Transfer Destination', fixturePassword)
+    const destination = await loadKdbxDatabase(destinationData, fixturePassword)
+    const imported = await prepareKdbxEntryImport(destination, transfer, 'destination.kdbx')
+    const reopened = await loadKdbxDatabase(imported.data, fixturePassword)
+    const importedEntry = [...reopened.getDefaultGroup().allEntries()].find((entry) => entry.uuid.toString() === imported.entryId)
+    const customSecret = importedEntry?.fields.get('Legacy Secret')
+    const attachment = importedEntry?.binaries.get('reference.txt')
+    const attachmentValue = KdbxBinaries.isKdbxBinaryWithHash(attachment) ? attachment.value : attachment
+    const importedIcon = importedEntry?.customIcon ? reopened.meta.customIcons.get(importedEntry.customIcon.toString()) : undefined
+
+    expect(importedEntry?.parentGroup?.uuid.toString()).toBe(reopened.getDefaultGroup().uuid.toString())
+    expect(importedEntry?.fields.get('Title')).toBe('Transferred Login')
+    expect(customSecret).toBeInstanceOf(ProtectedValue)
+    expect((customSecret as ProtectedValue).getText()).toBe('legacy-value')
+    expect(new TextDecoder().decode(attachmentValue instanceof ProtectedValue ? attachmentValue.getBinary() : attachmentValue)).toBe('attachment contents')
+    expect(importedEntry?.autoType.defaultSequence).toBe('{USERNAME}{TAB}{PASSWORD}{ENTER}')
+    expect(importedEntry?.customData?.get('migration-label')?.value).toBe('legacy import')
+    expect([...new Uint8Array(importedIcon?.data || new ArrayBuffer(0))]).toEqual([1, 2, 3, 4])
   })
 
   it('decrypts only a requested protected field for direct copy', async () => {

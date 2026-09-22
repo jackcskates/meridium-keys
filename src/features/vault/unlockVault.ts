@@ -1,5 +1,5 @@
 import { VaultOpenError } from './kdbx'
-import type { VaultEntryDetails, VaultEntryDraft, VaultEntryType, VaultGroupDraft, VaultSnapshot, VaultWorkerRequest, VaultWorkerResponse } from './types'
+import type { VaultEntryDetails, VaultEntryDraft, VaultEntryType, VaultGroupDraft, VaultSnapshot, VaultTransferEntry, VaultWorkerRequest, VaultWorkerResponse } from './types'
 
 export const maxVaultFileSize = 64 * 1024 * 1024
 
@@ -67,6 +67,12 @@ export class UnlockedVaultSession {
     return message.entry
   }
 
+  async exportEntryTransfer(entryId: string): Promise<VaultTransferEntry> {
+    const message = await this.request((requestId) => ({ type: 'export-entry-transfer', entryId, requestId }))
+    if (message.type !== 'entry-transfer') throw new VaultOpenError('WORKER_FAILURE', 'The secure vault worker returned an unexpected transfer response.')
+    return message.entry
+  }
+
   async getProtectedField(entryId: string, fieldKey: string) {
     const message = await this.request((requestId) => ({ type: 'get-protected-field', entryId, fieldKey, requestId }))
     if (message.type !== 'protected-field') throw new VaultOpenError('WORKER_FAILURE', 'The secure vault worker returned an unexpected protected field response.')
@@ -76,6 +82,12 @@ export class UnlockedVaultSession {
   async prepareEntrySave(entry: VaultEntryDraft): Promise<PreparedVaultChange> {
     const message = await this.request((requestId) => ({ type: 'prepare-entry-save', entry, requestId }))
     if (message.type !== 'change-prepared') throw new VaultOpenError('WORKER_FAILURE', 'The secure vault worker returned an unexpected save response.')
+    return { changeId: message.changeId, data: message.data, entryId: message.entryId, vault: message.vault }
+  }
+
+  async prepareEntryImport(entry: VaultTransferEntry): Promise<PreparedVaultChange> {
+    const message = await this.request((requestId) => ({ type: 'prepare-entry-import', entry, requestId }))
+    if (message.type !== 'change-prepared') throw new VaultOpenError('WORKER_FAILURE', 'The secure vault worker returned an unexpected import response.')
     return { changeId: message.changeId, data: message.data, entryId: message.entryId, vault: message.vault }
   }
 

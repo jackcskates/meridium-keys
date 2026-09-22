@@ -207,6 +207,15 @@
 .sidebar-vault-item { position: relative; }
 .sidebar-vault-item .vault-row { padding-right: 42px; }
 
+.sidebar-vault-item.is-drop-target .vault-row {
+  color: var(--text-primary);
+  background: var(--surface-hover);
+  box-shadow: inset 3px 0 0 var(--brand-meridium);
+}
+
+.sidebar-vault-item.is-drop-target .vault-avatar,
+.sidebar-vault-item.is-drop-target .sidebar-row-copy small { color: var(--brand-meridium); }
+
 .sidebar-vault-delete {
   position: absolute;
   top: 50%;
@@ -1063,6 +1072,8 @@ h1 {
   justify-content: flex-end;
   gap: 8px;
 }
+
+.vault-transfer-actions .button { flex: 1 1 0; min-width: 0; }
 
 .button-danger { color: var(--neutral-000); background: var(--danger); }
 .button-danger:hover { background: color-mix(in srgb, var(--danger) 88%, var(--contrast-white)); }

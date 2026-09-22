@@ -2,7 +2,7 @@
 
 import { DOMParser as XmlDomParser, XMLSerializer as XmlSerializer } from '@xmldom/xmldom'
 import type { Kdbx } from 'kdbxweb'
-import { createKdbxData, loadKdbxDatabase, mapKdbxSnapshot, prepareKdbxEntriesPermanentDelete, prepareKdbxEntriesTypeChange, prepareKdbxEntryDelete, prepareKdbxEntryMove, prepareKdbxEntrySave, prepareKdbxGroupDelete, prepareKdbxGroupSave, prepareKdbxVaultRename, readKdbxEntryDetails, readKdbxProtectedField, VaultOpenError } from './kdbx'
+import { createKdbxData, exportKdbxEntryTransfer, loadKdbxDatabase, mapKdbxSnapshot, prepareKdbxEntriesPermanentDelete, prepareKdbxEntriesTypeChange, prepareKdbxEntryDelete, prepareKdbxEntryImport, prepareKdbxEntryMove, prepareKdbxEntrySave, prepareKdbxGroupDelete, prepareKdbxGroupSave, prepareKdbxVaultRename, readKdbxEntryDetails, readKdbxProtectedField, VaultOpenError } from './kdbx'
 import type { VaultWorkerRequest, VaultWorkerResponse } from './types'
 
 const scope = self as DedicatedWorkerGlobalScope
@@ -54,6 +54,12 @@ scope.onmessage = async (event: MessageEvent<VaultWorkerRequest>) => {
       return
     }
 
+    if (event.data.type === 'export-entry-transfer') {
+      const entry = exportKdbxEntryTransfer(database, event.data.entryId)
+      scope.postMessage({ type: 'entry-transfer', entry, requestId: event.data.requestId } satisfies VaultWorkerResponse, [...entry.attachments.map((attachment) => attachment.data), ...(entry.customIcon ? [entry.customIcon.data] : [])])
+      return
+    }
+
     if (event.data.type === 'get-protected-field') {
       respond({ type: 'protected-field', value: readKdbxProtectedField(database, event.data.entryId, event.data.fieldKey), requestId: event.data.requestId })
       return
@@ -62,6 +68,22 @@ scope.onmessage = async (event: MessageEvent<VaultWorkerRequest>) => {
     if (event.data.type === 'prepare-entry-save') {
       if (pendingChange) throw new VaultOpenError('WORKER_FAILURE', 'Finish the current save before changing another entry.')
       const prepared = await prepareKdbxEntrySave(database, event.data.entry, fileName)
+      const changeId = crypto.randomUUID()
+      pendingChange = { id: changeId, database: prepared.database }
+      scope.postMessage({
+        type: 'change-prepared',
+        changeId,
+        data: prepared.data,
+        entryId: prepared.entryId,
+        requestId: event.data.requestId,
+        vault: prepared.vault,
+      } satisfies VaultWorkerResponse, [prepared.data])
+      return
+    }
+
+    if (event.data.type === 'prepare-entry-import') {
+      if (pendingChange) throw new VaultOpenError('WORKER_FAILURE', 'Finish the current save before importing another entry.')
+      const prepared = await prepareKdbxEntryImport(database, event.data.entry, fileName)
       const changeId = crypto.randomUUID()
       pendingChange = { id: changeId, database: prepared.database }
       scope.postMessage({
