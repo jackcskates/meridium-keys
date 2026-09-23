@@ -98,13 +98,9 @@ input:focus-visible {
 button, label { -webkit-tap-highlight-color: transparent; }
 #root { display: contents; }
 
-@media (max-width: 720px) {
+@media (max-width: 900px) {
   body {
     display: block;
-    padding:
-      env(safe-area-inset-top, 0)
-      env(safe-area-inset-right, 0)
-      env(safe-area-inset-bottom, 0)
-      env(safe-area-inset-left, 0);
+    padding: 0;
   }
 }

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
-import { Check, CheckSquare, Copy, Ellipsis, Eye, EyeOff, FolderInput, KeyRound, ListChecks, LoaderCircle, LockKeyhole, Pencil, Plus, Search, Square, Trash2, X } from 'lucide-react'
+import { Check, CheckSquare, ChevronLeft, ChevronRight, Copy, Ellipsis, Eye, EyeOff, FolderInput, KeyRound, ListChecks, LoaderCircle, LockKeyhole, Pencil, Plus, Search, Square, Trash2, X } from 'lucide-react'
 import { EntryDetailSkeleton } from '../../components/LoadingSkeletons'
 import { clampVaultColumnWidths, columnResizeHandleWidth, detailColumnMinWidth, entryColumnMinWidth, folderColumnMinWidth, type ColumnWidths } from './columnSizing'
 import { copyProtectedText } from './copyProtectedText'
@@ -29,12 +29,14 @@ type VaultBrowserProps = {
   onVaultDropTargetChange?: (vaultId: string) => void
   onRenameVault: (name: string) => Promise<VaultSnapshot>
   onDuplicateVault: (name: string) => Promise<void>
+  onEditorActivityChange?: (active: boolean) => void
   onSaveEntry: (entry: VaultEntryDraft) => Promise<{ entryId: string; vault: VaultSnapshot }>
   onSaveGroup: (group: VaultGroupDraft) => Promise<{ groupId: string; vault: VaultSnapshot }>
 }
 
 export const entryDragMime = 'application/x-meridium-vault-entry'
 const columnWidthStorageKey = 'meridium-keys-vault-column-widths'
+type MobileVaultScreen = 'categories' | 'entries' | 'detail'
 
 type ResizedColumn = 'folders' | 'entries'
 
@@ -265,13 +267,23 @@ function MoveEntriesDialog({ entries, vault, openVaultTargets, isMoving, error, 
   </form></DialogShell>
 }
 
-export function VaultBrowser({ vault, vaultId, canEdit, onChangeVaultPassword, onDeleteEntry, onDeleteEntriesForever, onDeleteGroup, onEntryDragEnd, onEntryDragStart, onLoadEntry, onLock, onMoveEntry, onMoveEntries, onDropEntryOnVault, onReadProtectedField, onRenameVault, onDuplicateVault, onSaveEntry, onSaveGroup, onVaultDropTargetChange, openVaultMoveTargets }: VaultBrowserProps) {
+export function VaultBrowser({ vault, vaultId, canEdit, onChangeVaultPassword, onDeleteEntry, onDeleteEntriesForever, onDeleteGroup, onEditorActivityChange, onEntryDragEnd, onEntryDragStart, onLoadEntry, onLock, onMoveEntry, onMoveEntries, onDropEntryOnVault, onReadProtectedField, onRenameVault, onDuplicateVault, onSaveEntry, onSaveGroup, onVaultDropTargetChange, openVaultMoveTargets }: VaultBrowserProps) {
+  const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 900px)').matches)
+  const [mobileScreen, setMobileScreen] = useState<MobileVaultScreen>('categories')
+  const [mobileVaultMenuOpen, setMobileVaultMenuOpen] = useState(false)
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 900px)')
+    const update = () => setIsMobile(media.matches)
+    media.addEventListener('change', update)
+    return () => media.removeEventListener('change', update)
+  }, [])
   const activeEntries = useMemo(() => vault.entries.filter((entry) => !entry.isDeleted), [vault.entries])
   const unfiledEntries = useMemo(() => activeEntries.filter((entry) => entry.groupId === vault.rootGroupId), [activeEntries, vault.rootGroupId])
   const activeGroups = useMemo(() => vault.groups.filter((group) => !group.isRecycleBin), [vault.groups])
   const recycleBin = vault.groups.find((group) => group.isRecycleBin && group.parentGroupId === vault.rootGroupId)
   const [selectedGroupId, setSelectedGroupId] = useState(vault.rootGroupId)
   const selectedGroup = vault.groups.find((group) => group.id === selectedGroupId)
+  const mobileCategoryName = selectedGroupId === vault.rootGroupId ? 'No folder' : selectedGroup?.name || 'Categories'
   const selectedGroupIsRecycleRoot = selectedGroup?.isRecycleBin && selectedGroup.parentGroupId === vault.rootGroupId
   const groupEntries = useMemo(() => {
     if (selectedGroupId === vault.rootGroupId) return unfiledEntries
@@ -286,6 +298,11 @@ export function VaultBrowser({ vault, vaultId, canEdit, onChangeVaultPassword, o
   const selectedEntry = visibleEntries.find((entry) => entry.id === selectedEntryId) ?? visibleEntries[0]
   const [choosingType, setChoosingType] = useState(false)
   const [draft, setDraft] = useState<VaultEntryDraft | null>(null)
+  const editorActive = Boolean(draft || choosingType)
+  useEffect(() => {
+    onEditorActivityChange?.(editorActive)
+    return () => onEditorActivityChange?.(false)
+  }, [editorActive, onEditorActivityChange])
   const [visibleSecrets, setVisibleSecrets] = useState<Set<string>>(() => new Set())
   const [isLoadingEntry, setIsLoadingEntry] = useState(false)
   const entryLoadRequestIdRef = useRef(0)
@@ -336,6 +353,28 @@ export function VaultBrowser({ vault, vaultId, canEdit, onChangeVaultPassword, o
   const folderColumnRef = useRef<HTMLElement>(null)
   const entryColumnRef = useRef<HTMLElement>(null)
   const groupMenuRef = useRef<HTMLDivElement>(null)
+  const mobileVaultMenuRef = useRef<HTMLDivElement>(null)
+  const mobileBreadcrumbRef = useRef<HTMLElement>(null)
+
+  useEffect(() => {
+    if (isMobile) mobileBreadcrumbRef.current?.scrollTo({ left: mobileBreadcrumbRef.current.scrollWidth, behavior: 'smooth' })
+  }, [isMobile, mobileScreen, selectedEntry?.title])
+
+  useEffect(() => {
+    if (!mobileVaultMenuOpen) return
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (!mobileVaultMenuRef.current?.contains(event.target as Node)) setMobileVaultMenuOpen(false)
+    }
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMobileVaultMenuOpen(false)
+    }
+    document.addEventListener('pointerdown', closeOnOutsidePointer)
+    document.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsidePointer)
+      document.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [mobileVaultMenuOpen])
 
   useEffect(() => {
     if (!openGroupMenuId) return
@@ -482,6 +521,7 @@ export function VaultBrowser({ vault, vaultId, canEdit, onChangeVaultPassword, o
     setSelectionMode(false)
     setSelectedEntryIds(new Set())
     resetEntryEditor()
+    setMobileScreen('entries')
   }
 
   function selectUnfiledEntry(entryId: string) {
@@ -489,6 +529,7 @@ export function VaultBrowser({ vault, vaultId, canEdit, onChangeVaultPassword, o
     setSelectedGroupId(vault.rootGroupId)
     setSelectedEntryId(entryId)
     resetEntryEditor()
+    setMobileScreen('detail')
   }
 
   function beginCreate() {
@@ -497,6 +538,7 @@ export function VaultBrowser({ vault, vaultId, canEdit, onChangeVaultPassword, o
     setChoosingType(true)
     setVisibleSecrets(new Set())
     setSaveError('')
+    setMobileScreen('detail')
   }
 
   function chooseType(type: VaultEntryDraft['type']) {
@@ -589,6 +631,7 @@ export function VaultBrowser({ vault, vaultId, canEdit, onChangeVaultPassword, o
       await onDeleteEntry(entryToDelete.id)
       setSelectedEntryId('')
       setEntryToDelete(null)
+      setMobileScreen('entries')
     } catch (error) {
       setDeleteError(error instanceof Error ? error.message : 'The entry could not be deleted safely.')
     } finally {
@@ -857,10 +900,15 @@ export function VaultBrowser({ vault, vaultId, canEdit, onChangeVaultPassword, o
   const entryWidthMax = Math.max(entryColumnMinWidth, Math.round(gridWidth - folderColumnMinWidth - detailColumnMinWidth - columnResizeHandleWidth * 2))
 
   return <div className="vault-browser">
+    <div className="mobile-vault-toolbar">
+      {mobileScreen !== 'categories' && <button aria-label={mobileScreen === 'detail' ? 'Back to keys' : 'Back to categories'} className="mobile-vault-back" disabled={editorActive} onClick={() => setMobileScreen(mobileScreen === 'detail' ? 'entries' : 'categories')} title={editorActive ? 'Save or cancel this key first' : undefined} type="button"><ChevronLeft aria-hidden="true" size={22} /></button>}
+      <nav aria-label="Vault breadcrumb" className="mobile-vault-breadcrumb" ref={mobileBreadcrumbRef}><span title={vault.databaseName}>{vault.databaseName}</span><ChevronRight aria-hidden="true" size={13} />{mobileScreen === 'categories' ? <strong>Categories</strong> : <button disabled={editorActive} onClick={() => setMobileScreen('categories')} type="button">Categories</button>}{mobileScreen !== 'categories' && <><ChevronRight aria-hidden="true" size={13} />{mobileScreen === 'entries' ? <strong>{mobileCategoryName}</strong> : <button disabled={editorActive} onClick={() => setMobileScreen('entries')} type="button">{mobileCategoryName}</button>}</>}{mobileScreen === 'detail' && <><ChevronRight aria-hidden="true" size={13} /><strong>{draft?.title || (choosingType ? 'New key' : selectedEntry?.title || 'Key')}</strong></>}</nav>
+      <div className="mobile-vault-menu" ref={mobileVaultMenuRef}><button aria-expanded={mobileVaultMenuOpen} aria-haspopup="menu" aria-label="Vault actions" className="mobile-vault-menu-trigger" disabled={editorActive} onClick={() => setMobileVaultMenuOpen((open) => !open)} title={editorActive ? 'Save or cancel this key first' : 'Vault actions'} type="button"><Ellipsis aria-hidden="true" size={22} /></button>{mobileVaultMenuOpen && <div className="mobile-vault-menu-panel" role="menu">{canEdit && <button onClick={() => { setMobileVaultMenuOpen(false); setRenameError(''); setRenameDialogOpen(true) }} role="menuitem" type="button"><Pencil aria-hidden="true" size={18} />Rename vault</button>}{canEdit && <button onClick={() => { setMobileVaultMenuOpen(false); setDuplicateError(''); setDuplicateDialogOpen(true) }} role="menuitem" type="button"><Copy aria-hidden="true" size={18} />Duplicate vault</button>}{canEdit && <button onClick={() => { setMobileVaultMenuOpen(false); setVaultPasswordError(''); setPasswordDialogOpen(true) }} role="menuitem" type="button"><KeyRound aria-hidden="true" size={18} />Change master password</button>}<button onClick={() => { setMobileVaultMenuOpen(false); onLock() }} role="menuitem" type="button"><LockKeyhole aria-hidden="true" size={18} />Lock vault</button></div>}</div>
+    </div>
     <header className="vault-browser-header"><div className="vault-browser-title"><div className="vault-browser-name-row"><h1>{vault.databaseName}</h1>{canEdit && <button aria-label="Rename vault" className="vault-name-action" disabled={isRenaming || isDeleting || isChangingVaultPassword || isDuplicating} onClick={() => { setRenameError(''); setRenameDialogOpen(true) }} title="Rename vault" type="button"><Pencil aria-hidden="true" size={15} /></button>}</div><p className="vault-browser-meta"><span>KDBX {vault.version}</span><span>{activeEntries.length} {activeEntries.length === 1 ? 'entry' : 'entries'}</span><span>Decrypted in memory</span></p></div><div className="vault-browser-actions">{canEdit && <button aria-label="Duplicate vault" className="button button-secondary button-icon" disabled={isDuplicating || isRenaming || isChangingVaultPassword} onClick={() => { setDuplicateError(''); setDuplicateDialogOpen(true) }} title="Duplicate vault" type="button"><Copy aria-hidden="true" /></button>}{canEdit && <button aria-label="Change vault password" className="button button-secondary button-icon" disabled={isChangingVaultPassword || isRenaming || isDuplicating} onClick={() => { setVaultPasswordError(''); setPasswordDialogOpen(true) }} title="Change vault password" type="button"><KeyRound aria-hidden="true" /></button>}<button aria-label="Lock vault" className="button button-secondary button-icon" disabled={isChangingVaultPassword || isDuplicating} onClick={onLock} title="Lock vault" type="button"><LockKeyhole aria-hidden="true" /></button></div></header>
     {!canEdit && <p className="read-only-note">This device file is open read only. Connect and open its Dropbox copy to add or edit entries.</p>}
-    <div className="vault-browser-grid" ref={vaultGridRef} style={columnWidths ? { gridTemplateColumns: `${columnWidths.folders}px ${columnResizeHandleWidth}px ${columnWidths.entries}px ${columnResizeHandleWidth}px minmax(${detailColumnMinWidth}px, 1fr)` } : undefined}>
-      <aside className="group-list" aria-label="Vault folders" ref={folderColumnRef}>
+    <div className={`vault-browser-grid mobile-screen-${mobileScreen}`} ref={vaultGridRef} style={columnWidths && !isMobile ? { gridTemplateColumns: `${columnWidths.folders}px ${columnResizeHandleWidth}px ${columnWidths.entries}px ${columnResizeHandleWidth}px minmax(${detailColumnMinWidth}px, 1fr)` } : undefined}>
+      <aside className="group-list" aria-hidden={isMobile && mobileScreen !== 'categories'} aria-label="Vault folders" inert={isMobile && mobileScreen !== 'categories'} ref={folderColumnRef}>
         <div className="panel-heading"><h2>Folders</h2>{canEdit && <button aria-label="Create folder" className="panel-action" onClick={() => { setGroupError(''); setGroupDialog('new') }} title="Create folder" type="button"><Plus aria-hidden="true" size={17} /></button>}</div>
         <div className="group-list-scroll">
           <div className="folder-items">
@@ -878,7 +926,7 @@ export function VaultBrowser({ vault, vaultId, canEdit, onChangeVaultPassword, o
                   style={{ paddingInlineStart: `${10 + group.depth * 12}px` }}
                   title={group.path}
                   type="button"
-                ><span>{group.name}</span><small>{group.entryCount}</small></button>
+                ><span>{group.name}</span><small>{group.entryCount}</small><ChevronRight aria-hidden="true" className="mobile-folder-chevron" size={18} /></button>
                 {canEdit && <button
                   aria-expanded={isMenuOpen}
                   aria-haspopup="menu"
@@ -895,6 +943,7 @@ export function VaultBrowser({ vault, vaultId, canEdit, onChangeVaultPassword, o
               </div>
             })}
           </div>
+          <button className="mobile-unfiled-category group-nav-button" onClick={() => selectGroup(vault.rootGroupId)} type="button"><span>No folder</span><small>{unfiledEntries.length}</small><ChevronRight aria-hidden="true" size={18} /></button>
           <div
             aria-label="Entries not in a folder"
             className={`unfiled-entry-list ${dropTargetGroupId === vault.rootGroupId ? 'is-drop-target' : ''}`}
@@ -916,7 +965,7 @@ export function VaultBrowser({ vault, vaultId, canEdit, onChangeVaultPassword, o
           onClick={() => selectGroup(recycleBin.id)}
           title={recycleBin.path}
           type="button"
-        ><span>Recycle Bin</span><small>{recycleBin.entryCount}</small></button></div>}
+        ><span>Recycle Bin</span><small>{recycleBin.entryCount}</small><ChevronRight aria-hidden="true" className="mobile-folder-chevron" size={18} /></button></div>}
       </aside>
       <div
         aria-label="Resize Folders and Keys columns"
@@ -935,7 +984,7 @@ export function VaultBrowser({ vault, vaultId, canEdit, onChangeVaultPassword, o
         tabIndex={0}
         title="Resize Folders and Keys. Use arrow keys or drag; double-click to reset."
       />
-      <section className="entry-list" aria-label="Vault entries" ref={entryColumnRef}>
+      <section className="entry-list" aria-hidden={isMobile && mobileScreen !== 'entries'} aria-label="Vault entries" inert={isMobile && mobileScreen !== 'entries'} ref={entryColumnRef}>
         {moveStatus && <p aria-live="polite" className="visually-hidden">{moveStatus}</p>}
         <div className={`panel-heading entry-panel-heading ${selectionMode ? 'is-selecting' : ''}`}><span className="entry-panel-title"><h2>Keys</h2>{selectionMode && <small aria-live="polite">{selectedVisibleEntryIds.size} selected</small>}</span><span className="entry-selection-actions">
           {selectionMode ? <>
@@ -947,13 +996,13 @@ export function VaultBrowser({ vault, vaultId, canEdit, onChangeVaultPassword, o
         {groupEntries.length > 0 && <label className={`entry-search ${entrySearch ? 'has-value' : ''}`}><Search aria-hidden="true" size={14} /><span className="visually-hidden">Filter keys</span><input aria-label="Filter keys" autoComplete="off" enterKeyHint="search" onChange={(event) => { setEntrySearch(event.target.value); if (selectionMode) setSelectedEntryIds(new Set()) }} placeholder="Filter keys" spellCheck={false} type="search" value={entrySearch} />{entrySearch && <button aria-label="Clear key filter" onClick={() => { setEntrySearch(''); if (selectionMode) setSelectedEntryIds(new Set()) }} title="Clear filter" type="button"><X aria-hidden="true" size={13} /></button>}</label>}
         {selectionMode && <div className="entry-select-all-row"><button aria-label={allVisibleEntriesSelected ? 'Clear filtered selection' : `Select all ${visibleEntries.length} filtered entries`} aria-checked={allVisibleEntriesSelected} className="entry-select-all" disabled={!visibleEntries.length || isDeleting} onClick={() => setSelectedEntryIds(allVisibleEntriesSelected ? new Set() : new Set(visibleEntries.map((entry) => entry.id)))} role="checkbox" title={allVisibleEntriesSelected ? 'Clear filtered selection' : 'Select all filtered entries'} type="button">{allVisibleEntriesSelected ? <CheckSquare aria-hidden="true" size={19} /> : <Square aria-hidden="true" size={19} />}</button><span>{visibleEntries.length ? `${selectedVisibleEntryIds.size} of ${visibleEntries.length} filtered` : 'No matching keys'}</span></div>}
         {visibleEntries.map((entry) => <div
-          className={`entry-row ${!selectionMode && selectedEntryId === entry.id ? 'is-selected' : ''} ${selectionMode && selectedVisibleEntryIds.has(entry.id) ? 'is-bulk-selected' : ''} ${draggedEntryId === entry.id ? 'is-dragging' : ''} ${selectionMode ? 'is-selecting' : ''}`}
+          className={`entry-row ${!isMobile && !selectionMode && selectedEntryId === entry.id ? 'is-selected' : ''} ${selectionMode && selectedVisibleEntryIds.has(entry.id) ? 'is-bulk-selected' : ''} ${draggedEntryId === entry.id ? 'is-dragging' : ''} ${selectionMode ? 'is-selecting' : ''}`}
           key={entry.id}
         >
           <button
             className="entry-row-open"
             draggable={!selectionMode && canEdit && !entry.isDeleted && !isMovingEntry}
-            onClick={() => { if (selectionMode) toggleEntrySelection(entry.id); else { setSelectedEntryId(entry.id); resetEntryEditor() } }}
+            onClick={() => { if (selectionMode) toggleEntrySelection(entry.id); else { setSelectedEntryId(entry.id); resetEntryEditor(); setMobileScreen('detail') } }}
             onDragEnd={() => { const wasActive = Boolean(nativeDragEntryIdRef.current); clearDragState(); if (wasActive && !isMovingEntry) setMoveStatus('Move canceled. Drop entries on No folder or another folder.') }}
             onDragStart={(event) => beginNativeDrag(event, entry)}
             type="button"
@@ -970,6 +1019,7 @@ export function VaultBrowser({ vault, vaultId, canEdit, onChangeVaultPassword, o
             type="button"
           ><DragHandle /></button>}
         </div>)}
+        {!visibleEntries.length && !selectionMode && <p className="mobile-keys-empty">{entrySearch ? 'No keys match your search.' : `No keys in ${mobileCategoryName}. Use + to add one.`}</p>}
       </section>
       <div
         aria-label="Resize Keys and entry detail columns"
@@ -988,13 +1038,13 @@ export function VaultBrowser({ vault, vaultId, canEdit, onChangeVaultPassword, o
         tabIndex={0}
         title="Resize Keys and detail. Use arrow keys or drag; double-click to reset."
       />
-      <section className="entry-detail" aria-label="Selected entry">
-        {selectionMode ? <div className="bulk-selection-summary"><span className="entry-glyph entry-glyph-large"><ListChecks aria-hidden="true" size={21} /></span><div><p className="eyebrow">Bulk selection</p><h2>{selectedVisibleEntryIds.size ? `${selectedVisibleEntryIds.size} selected` : 'Choose entries'}</h2><p>Select filtered entries, then move or delete them.</p></div></div> : isLoadingEntry ? <EntryDetailSkeleton /> : choosingType ? <div className="entry-type-picker"><div className="entry-editor-heading"><div><p className="eyebrow">New entry</p><h2>Choose a type</h2></div></div><p className="type-picker-copy">The type controls which fields appear in the entry.</p><div className="entry-type-grid">{entryTypeDefinitions.map((type) => <button key={type.id} onClick={() => chooseType(type.id)} type="button"><span className="entry-glyph"><EntryTypeIcon type={type.id} /></span><span><strong>{type.label}</strong><small>{type.description}</small></span></button>)}</div><button className="text-button" onClick={resetEntryEditor} type="button">Cancel</button></div> : draft && definition ? <form autoComplete="off" className="entry-editor" onSubmit={saveEntry}>
+      <section className="entry-detail" aria-hidden={isMobile && mobileScreen !== 'detail'} aria-label="Selected entry" inert={isMobile && mobileScreen !== 'detail'}>
+        {selectionMode ? <div className="bulk-selection-summary"><span className="entry-glyph entry-glyph-large"><ListChecks aria-hidden="true" size={21} /></span><div><p className="eyebrow">Bulk selection</p><h2>{selectedVisibleEntryIds.size ? `${selectedVisibleEntryIds.size} selected` : 'Choose entries'}</h2><p>Select filtered entries, then move or delete them.</p></div></div> : isLoadingEntry ? <EntryDetailSkeleton /> : choosingType ? <div className="entry-type-picker"><div className="entry-editor-heading"><div><p className="eyebrow">New entry</p><h2>Choose a type</h2></div></div><p className="type-picker-copy">The type controls which fields appear in the entry.</p><div className="entry-type-grid">{entryTypeDefinitions.map((type) => <button key={type.id} onClick={() => chooseType(type.id)} type="button"><span className="entry-glyph"><EntryTypeIcon type={type.id} /></span><span><strong>{type.label}</strong><small>{type.description}</small></span></button>)}</div><button className="text-button" onClick={() => { resetEntryEditor(); setMobileScreen('entries') }} type="button">Cancel</button></div> : draft && definition ? <form autoComplete="off" className="entry-editor" onSubmit={saveEntry}>
           <div className="entry-editor-heading"><div><p className="eyebrow">{draft.id ? `Edit ${definition.label}` : `New ${definition.label}`}</p><h2>{draft.id ? draft.title || `Untitled ${definition.label}` : `Add ${definition.label}`}</h2></div>{!draft.id && <button className="text-button" onClick={() => { setDraft(null); setChoosingType(true) }} type="button">Change type</button>}</div>
           <label className="field"><span>Name</span><input autoFocus autoComplete="off" disabled={isSaving} onChange={(event) => setDraft({ ...draft, title: event.target.value })} required value={draft.title} /></label>
           <label className="field"><span>Folder</span><select disabled={isSaving} onChange={(event) => setDraft({ ...draft, groupId: event.target.value })} value={draft.groupId}><option value={vault.rootGroupId}>No folder</option>{vault.groups.filter((group) => !group.isRecycleBin).map((group) => <option key={group.id} value={group.id}>{group.path}</option>)}</select></label>
           {definition.fields.map((field) => <EntryField disabled={isSaving} field={field} key={field.key} onChange={(value) => setDraft({ ...draft, fields: { ...draft.fields, [field.key]: value } })} onGenerate={field.key === 'password' ? () => setDraft({ ...draft, fields: { ...draft.fields, [field.key]: generateServicePassword() } }) : undefined} onToggle={() => setVisibleSecrets((current) => { const next = new Set(current); if (next.has(field.key)) next.delete(field.key); else next.add(field.key); return next })} value={draft.fields[field.key] || ''} visible={visibleSecrets.has(field.key)} />)}
-          {saveError && <p className="unlock-error" role="alert">{saveError}</p>}<div className="entry-editor-actions"><button className="button button-secondary" disabled={isSaving} onClick={resetEntryEditor} type="button">Cancel</button><button className="button button-primary" disabled={isSaving} type="submit">{isSaving ? 'Encrypting and saving…' : 'Save entry'}</button></div>
+          {saveError && <p className="unlock-error" role="alert">{saveError}</p>}<div className="entry-editor-actions"><button className="button button-secondary" disabled={isSaving} onClick={() => { resetEntryEditor(); setMobileScreen('entries') }} type="button">Cancel</button><button className="button button-primary" disabled={isSaving} type="submit">{isSaving ? 'Encrypting and saving…' : 'Save entry'}</button></div>
         </form> : selectedEntry ? <><div className="entry-detail-heading"><span className="entry-glyph entry-glyph-large"><EntryTypeIcon size={21} type={selectedEntry.type} /></span><div><p className="eyebrow">{selectedEntry.isDeleted ? 'Recycle Bin' : entryTypeLabel(selectedEntry.type)}</p><h2>{selectedEntry.title}</h2></div></div><dl><div><dt>Type</dt><dd>{entryTypeLabel(selectedEntry.type)}</dd></div><div><dt>Folder</dt><dd>{selectedEntry.groupId === vault.rootGroupId ? 'No folder' : vault.groups.find((group) => group.id === selectedEntry.groupId)?.path || '—'}</dd></div>{selectedEntry.username && <div><dt>Username</dt><dd>{selectedEntry.username}</dd></div>}{selectedEntry.url && <div><dt>Website</dt><dd>{selectedEntry.url}</dd></div>}{selectedProtectedFields.map((field) => {
           const isCurrent = copyState?.entryId === selectedEntry.id && copyState.fieldKey === field.key
           const isCopying = isCurrent && copyState.status === 'copying'

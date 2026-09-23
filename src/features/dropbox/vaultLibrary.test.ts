@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { DropboxVaultFile } from './types'
-import { removeVault, upsertVault } from './vaultLibrary'
+import { filterVaults, removeVault, upsertVault } from './vaultLibrary'
 
 const vault = (id: string, name: string, rev: string): DropboxVaultFile => ({
   id, name, rev, pathDisplay: `/${name}`, size: 100, serverModified: '2026-09-22T00:00:00Z',
@@ -23,5 +23,12 @@ describe('Dropbox vault library mutations', () => {
 
   it('removes only the deleted vault', () => {
     expect(removeVault([vault('a', 'Alpha.kdbx', 'one'), vault('b', 'Beta.kdbx', 'one')], 'a').map((entry) => entry.id)).toEqual(['b'])
+  })
+
+  it('finds existing Dropbox vaults by case-insensitive name without changing the library', () => {
+    const current = [vault('a', 'Personal.kdbx', 'one'), vault('b', 'Development.kdbx', 'one')]
+    expect(filterVaults(current, ' deveLOP ')).toEqual([current[1]])
+    expect(filterVaults(current, 'missing')).toEqual([])
+    expect(filterVaults(current, ' ')).toBe(current)
   })
 })

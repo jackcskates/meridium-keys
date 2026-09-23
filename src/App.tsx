@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type DragEvent as ReactDragEvent } from 'react'
 import { useRegisterSW } from 'virtual:pwa-register/react'
 import { ConnectionSkeleton, VaultListSkeleton } from './components/LoadingSkeletons'
+import { MobileVaultHome } from './components/MobileVaultHome'
 import { appPasswordIsConfigured, clearAppPassword, configureAppPassword, verifyAppPassword } from './features/app-lock/verifyAppPassword'
 import { forgetDropboxRefreshToken } from './features/dropbox/credentialStore'
 import type { DropboxVaultFile } from './features/dropbox/types'
@@ -44,6 +45,7 @@ type IconName =
   | 'eye-off'
   | 'file'
   | 'folder'
+  | 'home'
   | 'key'
   | 'lock'
   | 'move'
@@ -64,6 +66,7 @@ function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
     'eye-off': <><path d="m3 3 18 18" /><path d="M10.6 6.2A10 10 0 0 1 12 6c6.5 0 10 6 10 6a17 17 0 0 1-2.1 2.8M6.6 6.6C3.6 8.4 2 12 2 12s3.5 6 10 6a9.8 9.8 0 0 0 4.2-.9M9.9 9.9a3 3 0 0 0 4.2 4.2" /></>,
     file: <><path d="M6 2h8l4 4v16H6Z" /><path d="M14 2v5h5" /></>,
     folder: <path d="M3 6h6l2 2h10v11H3Z" />,
+    home: <><path d="m3 10 9-7 9 7v10H3Z" /><path d="M9 20v-7h6v7" /></>,
     key: <><circle cx="8" cy="12" r="4" /><path d="M12 12h9m-3 0v3m-3-3v2" /></>,
     lock: <><rect x="5" y="10" width="14" height="11" rx="3" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /></>,
     move: <><path d="M5 12h14" /><path d="m14 7 5 5-5 5" /></>,
@@ -158,6 +161,16 @@ function DeleteVaultDialog({ vault, isDeleting, error, onCancel, onDelete }: {
       </div>
     </dialog>
   )
+}
+
+function DiscardMobileDraftDialog({ onCancel, onDiscard }: { onCancel: () => void; onDiscard: () => void }) {
+  const dialogRef = useRef<HTMLDialogElement>(null)
+  useEffect(() => {
+    const dialog = dialogRef.current
+    dialog?.showModal()
+    return () => { if (dialog?.open) dialog.close() }
+  }, [])
+  return <dialog aria-describedby="discard-mobile-draft-description" aria-labelledby="discard-mobile-draft-title" className="confirm-dialog" onCancel={(event) => { event.preventDefault(); onCancel() }} ref={dialogRef}><div className="confirm-dialog-card"><div className="confirm-dialog-copy"><p className="eyebrow">Unsaved key</p><h2 id="discard-mobile-draft-title">Leave this key?</h2><p id="discard-mobile-draft-description">Your unsaved changes will be discarded. Save or cancel the entry to return safely.</p></div><div className="confirm-dialog-actions"><button className="button button-secondary" onClick={onCancel} type="button">Keep editing</button><button className="button button-danger" onClick={onDiscard} type="button">Discard and go Home</button></div></div></dialog>
 }
 
 function UpdateLockDialog({ onCancel, onLock }: { onCancel: () => void; onLock: () => void }) {
@@ -465,7 +478,10 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
   const [formTouched, setFormTouched] = useState(false)
   const [createError, setCreateError] = useState('')
   const [createStage, setCreateStage] = useState<CreateVaultStage | 'uploading' | null>(null)
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => window.matchMedia('(max-width: 720px)').matches)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => window.matchMedia('(max-width: 900px)').matches)
+  const [vaultSearch, setVaultSearch] = useState('')
+  const [mobileEditorActive, setMobileEditorActive] = useState(false)
+  const [discardMobileDraftOpen, setDiscardMobileDraftOpen] = useState(false)
   const dropbox = useDropbox()
   const pwa = usePwaLifecycle()
   const [selectedVaultFile, setSelectedVaultFile] = useState<File | null>(null)
@@ -1103,7 +1119,12 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
       </aside>
 
       <main className="workspace">
-        <section className={`content-stage ${activeView === 'browse' ? 'is-vault-open' : ''}`}>
+        <header className="mobile-app-bar">
+          <span className="mobile-app-identity"><BrandMark /><span><strong>Meridium</strong><small>Keys</small></span></span>
+          <span className="mobile-app-context">{activeView === 'browse' ? vaultSnapshot?.databaseName : activeView === 'unlock' ? selectedFile.replace(/\.kdbx$/i, '') : 'Home'}</span>
+          <button aria-label="Lock Meridium Keys" className="mobile-app-lock" onClick={() => { closeAllVaultSessions(); onLockApp() }} title="Lock app" type="button"><Icon name="lock" size={19} /></button>
+        </header>
+        <section className={`content-stage ${activeView === 'browse' ? 'is-vault-open' : ''} ${activeView === 'vaults' ? 'is-home' : ''}`}>
           {activeView === 'connect' && (dropbox.status === 'connecting' || dropbox.status === 'loading') && !dropbox.session && <ConnectionSkeleton />}
           {activeView === 'connect' && (dropbox.status !== 'connecting' && dropbox.status !== 'loading' || Boolean(dropbox.session)) && (
             <div className="focus-card connect-card">
@@ -1135,6 +1156,8 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
                   <span className="choice-card-copy"><strong>Open an existing vault</strong><small>Choose a standard KDBX file from this device.</small></span>
                 </button>
               </div>
+
+              <MobileVaultHome vaults={dropbox.vaults} query={vaultSearch} onQueryChange={setVaultSearch} isOnline={pwa.isOnline} isConnected={dropboxConnected} isLoading={dropbox.status === 'loading'} openingVaultId={openingDropboxVaultId} deletingVaultId={deletingDropboxVaultId} openVaultIds={Object.keys(openDropboxVaultSnapshots)} deviceVaultName={selectedStorage === 'device' ? selectedFile : null} deviceVaultOpen={Boolean(vaultSnapshot)} onRefresh={() => void dropbox.refresh()} onCreate={() => setView('create')} onOpenVault={(vault) => void openDropboxVault(vault)} onDeleteVault={requestDeleteVault} onOpenDeviceVault={() => setView(vaultSnapshot ? 'browse' : 'unlock')} onPickDeviceFile={() => fileInputRef.current?.click()} onSignOut={() => { closeAllVaultSessions(); dropbox.disconnect(); onLockApp() }} />
 
               {dropbox.error && <p className="unlock-error" role="alert">{dropbox.error}</p>}
             </div>
@@ -1260,6 +1283,7 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
               onDeleteGroup={deleteVaultGroup}
               onDeleteEntry={deleteVaultEntry}
               onDuplicateVault={duplicateOpenVault}
+              onEditorActivityChange={setMobileEditorActive}
               onLoadEntry={(entryId) => {
                 const session = vaultSessionRef.current
                 return session ? session.getEntry(entryId) : Promise.reject(new Error('The vault is locked. Open it again before editing an entry.'))
@@ -1285,7 +1309,13 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
 
       </main>
 
+      <nav aria-label="Mobile navigation" className="mobile-dock">
+        <button aria-current={activeView === 'browse' || activeView === 'unlock' ? undefined : 'page'} className={activeView === 'browse' || activeView === 'unlock' ? '' : 'is-active'} onClick={() => mobileEditorActive ? setDiscardMobileDraftOpen(true) : setView(dropboxConnected ? 'vaults' : 'connect')} type="button"><Icon name="home" size={21} /><span>Home</span></button>
+        <button aria-current={activeView === 'browse' || activeView === 'unlock' ? 'page' : undefined} className={activeView === 'browse' || activeView === 'unlock' ? 'is-active' : ''} disabled={!selectedVaultFile && !vaultSnapshot} onClick={() => setView(vaultSnapshot ? 'browse' : 'unlock')} type="button"><Icon name="folder" size={21} /><span>Categories</span></button>
+      </nav>
+
       <input accept=".kdbx,application/octet-stream" aria-hidden="true" className="visually-hidden" onChange={(event) => { openFile(event.target.files?.[0]); event.currentTarget.value = '' }} ref={fileInputRef} tabIndex={-1} type="file" />
+      {discardMobileDraftOpen && <DiscardMobileDraftDialog onCancel={() => setDiscardMobileDraftOpen(false)} onDiscard={() => { setDiscardMobileDraftOpen(false); setMobileEditorActive(false); setView(dropboxConnected ? 'vaults' : 'connect') }} />}
       {vaultToDelete && (
         <DeleteVaultDialog
           error={deleteError}
