@@ -7,11 +7,13 @@ import { EntryTypeIcon } from './EntryTypeIcon'
 import { createEmptyEntryDraft, entryMatchesKeyword, entryTypeDefinitions, entryTypeLabel, getEntryTypeDefinition, type EntryFieldDefinition } from './entryTypes'
 import { generateServicePassword, generatedPasswordLength } from './passwordGenerator'
 import { vaultPasswordRequirements } from './passwordPolicy'
+import type { RecentTarget } from './recentAccess'
 import type { OpenVaultMoveTarget, VaultEntryDetails, VaultEntryDraft, VaultEntrySummary, VaultGroupDraft, VaultGroupSummary, VaultMoveDestination, VaultSnapshot } from './types'
 
 type VaultBrowserProps = {
   vault: VaultSnapshot
   vaultId?: string
+  initialMobileTarget?: RecentTarget | null
   canEdit: boolean
   onChangeVaultPassword: (currentPassword: string, newPassword: string) => Promise<VaultSnapshot>
   onDeleteEntry: (entryId: string) => Promise<VaultSnapshot>
@@ -30,6 +32,7 @@ type VaultBrowserProps = {
   onRenameVault: (name: string) => Promise<VaultSnapshot>
   onDuplicateVault: (name: string) => Promise<void>
   onEditorActivityChange?: (active: boolean) => void
+  onRecentAccess?: (target: RecentTarget) => void
   onSaveEntry: (entry: VaultEntryDraft) => Promise<{ entryId: string; vault: VaultSnapshot }>
   onSaveGroup: (group: VaultGroupDraft) => Promise<{ groupId: string; vault: VaultSnapshot }>
 }
@@ -267,9 +270,11 @@ function MoveEntriesDialog({ entries, vault, openVaultTargets, isMoving, error, 
   </form></DialogShell>
 }
 
-export function VaultBrowser({ vault, vaultId, canEdit, onChangeVaultPassword, onDeleteEntry, onDeleteEntriesForever, onDeleteGroup, onEditorActivityChange, onEntryDragEnd, onEntryDragStart, onLoadEntry, onLock, onMoveEntry, onMoveEntries, onDropEntryOnVault, onReadProtectedField, onRenameVault, onDuplicateVault, onSaveEntry, onSaveGroup, onVaultDropTargetChange, openVaultMoveTargets }: VaultBrowserProps) {
+export function VaultBrowser({ vault, vaultId, initialMobileTarget, canEdit, onChangeVaultPassword, onDeleteEntry, onDeleteEntriesForever, onDeleteGroup, onEditorActivityChange, onRecentAccess, onEntryDragEnd, onEntryDragStart, onLoadEntry, onLock, onMoveEntry, onMoveEntries, onDropEntryOnVault, onReadProtectedField, onRenameVault, onDuplicateVault, onSaveEntry, onSaveGroup, onVaultDropTargetChange, openVaultMoveTargets }: VaultBrowserProps) {
+  const initialRecentEntry = initialMobileTarget?.kind === 'entry' ? vault.entries.find((entry) => entry.id === initialMobileTarget.id && !entry.isDeleted) : undefined
+  const initialRecentFolder = initialMobileTarget?.kind === 'folder' ? vault.groups.find((group) => group.id === initialMobileTarget.id && !group.isRecycleBin) : undefined
   const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 900px)').matches)
-  const [mobileScreen, setMobileScreen] = useState<MobileVaultScreen>('categories')
+  const [mobileScreen, setMobileScreen] = useState<MobileVaultScreen>(() => initialRecentEntry ? 'detail' : initialRecentFolder ? 'entries' : 'categories')
   const [mobileVaultMenuOpen, setMobileVaultMenuOpen] = useState(false)
   useEffect(() => {
     const media = window.matchMedia('(max-width: 900px)')
@@ -281,7 +286,7 @@ export function VaultBrowser({ vault, vaultId, canEdit, onChangeVaultPassword, o
   const unfiledEntries = useMemo(() => activeEntries.filter((entry) => entry.groupId === vault.rootGroupId), [activeEntries, vault.rootGroupId])
   const activeGroups = useMemo(() => vault.groups.filter((group) => !group.isRecycleBin), [vault.groups])
   const recycleBin = vault.groups.find((group) => group.isRecycleBin && group.parentGroupId === vault.rootGroupId)
-  const [selectedGroupId, setSelectedGroupId] = useState(vault.rootGroupId)
+  const [selectedGroupId, setSelectedGroupId] = useState(initialRecentEntry?.groupId || initialRecentFolder?.id || vault.rootGroupId)
   const selectedGroup = vault.groups.find((group) => group.id === selectedGroupId)
   const mobileCategoryName = selectedGroupId === vault.rootGroupId ? 'No folder' : selectedGroup?.name || 'Categories'
   const selectedGroupIsRecycleRoot = selectedGroup?.isRecycleBin && selectedGroup.parentGroupId === vault.rootGroupId
@@ -294,7 +299,7 @@ export function VaultBrowser({ vault, vaultId, canEdit, onChangeVaultPassword, o
   const visibleEntries = useMemo(() => {
     return groupEntries.filter((entry) => entryMatchesKeyword(entry, entrySearch))
   }, [entrySearch, groupEntries])
-  const [selectedEntryId, setSelectedEntryId] = useState(unfiledEntries[0]?.id ?? '')
+  const [selectedEntryId, setSelectedEntryId] = useState(initialRecentEntry?.id || unfiledEntries[0]?.id || '')
   const selectedEntry = visibleEntries.find((entry) => entry.id === selectedEntryId) ?? visibleEntries[0]
   const [choosingType, setChoosingType] = useState(false)
   const [draft, setDraft] = useState<VaultEntryDraft | null>(null)
@@ -522,6 +527,7 @@ export function VaultBrowser({ vault, vaultId, canEdit, onChangeVaultPassword, o
     setSelectedEntryIds(new Set())
     resetEntryEditor()
     setMobileScreen('entries')
+    if (group && !group.isRecycleBin) onRecentAccess?.({ kind: 'folder', id: groupId })
   }
 
   function selectUnfiledEntry(entryId: string) {
@@ -530,6 +536,7 @@ export function VaultBrowser({ vault, vaultId, canEdit, onChangeVaultPassword, o
     setSelectedEntryId(entryId)
     resetEntryEditor()
     setMobileScreen('detail')
+    onRecentAccess?.({ kind: 'entry', id: entryId })
   }
 
   function beginCreate() {
@@ -1002,7 +1009,7 @@ export function VaultBrowser({ vault, vaultId, canEdit, onChangeVaultPassword, o
           <button
             className="entry-row-open"
             draggable={!selectionMode && canEdit && !entry.isDeleted && !isMovingEntry}
-            onClick={() => { if (selectionMode) toggleEntrySelection(entry.id); else { setSelectedEntryId(entry.id); resetEntryEditor(); setMobileScreen('detail') } }}
+            onClick={() => { if (selectionMode) toggleEntrySelection(entry.id); else { setSelectedEntryId(entry.id); resetEntryEditor(); setMobileScreen('detail'); onRecentAccess?.({ kind: 'entry', id: entry.id }) } }}
             onDragEnd={() => { const wasActive = Boolean(nativeDragEntryIdRef.current); clearDragState(); if (wasActive && !isMovingEntry) setMoveStatus('Move canceled. Drop entries on No folder or another folder.') }}
             onDragStart={(event) => beginNativeDrag(event, entry)}
             type="button"

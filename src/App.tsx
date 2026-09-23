@@ -16,6 +16,7 @@ import { persistPreparedChange, VaultSessionRecoveryError } from './features/vau
 import type { VaultEntryDraft, VaultEntrySummary, VaultGroupDraft, VaultMoveDestination, VaultSnapshot } from './features/vault/types'
 import { openVaultSession, type PreparedVaultChange, type UnlockedVaultSession, type UnlockStage } from './features/vault/unlockVault'
 import { vaultViewIdentity } from './features/vault/vaultViewIdentity'
+import { rememberRecentAccess, resolveRecentAccess, type RecentHistory, type RecentTarget } from './features/vault/recentAccess'
 import './App.css'
 
 type View = 'connect' | 'vaults' | 'create' | 'unlock' | 'browse'
@@ -482,6 +483,9 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
   const [vaultSearch, setVaultSearch] = useState('')
   const [mobileEditorActive, setMobileEditorActive] = useState(false)
   const [discardMobileDraftOpen, setDiscardMobileDraftOpen] = useState(false)
+  const [recentAccessByVault, setRecentAccessByVault] = useState<Record<string, RecentHistory>>({})
+  const [mobileOpenTarget, setMobileOpenTarget] = useState<RecentTarget | null>(null)
+  const [mobileNavigationEpoch, setMobileNavigationEpoch] = useState(0)
   const dropbox = useDropbox()
   const pwa = usePwaLifecycle()
   const [selectedVaultFile, setSelectedVaultFile] = useState<File | null>(null)
@@ -511,6 +515,8 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
   const dropboxConnected = dropbox.isConnected
   const totalVaults = dropbox.vaults.length + (selectedStorage === 'device' && selectedFile ? 1 : 0)
   const activeView = dropbox.isConnected && view === 'connect' ? 'vaults' : view
+  const activeVaultIdentity = vaultViewIdentity(selectedStorage, activeDropboxVaultId, deviceSelectionId)
+  const recentShortcuts = vaultSnapshot ? resolveRecentAccess(vaultSnapshot, recentAccessByVault[activeVaultIdentity]) : { entries: [], folders: [] }
 
   const passwordRequirements = vaultPasswordRequirements(password, vaultName, confirmation)
   const passwordReady = passwordRequirements.every((requirement) => requirement.met)
@@ -568,6 +574,8 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
     vaultSessionRef.current = null
     setOpenDropboxVaultSnapshots({})
     setVaultSnapshot(null)
+    setRecentAccessByVault({})
+    setMobileOpenTarget(null)
   }
 
   function activateOpenDropboxVault(vaultId: string) {
@@ -587,6 +595,7 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
 
   function openFile(file?: File, storage: 'device' | 'dropbox' = 'device') {
     if (!file) return
+    setMobileOpenTarget(null)
     if (selectedStorage === 'device') vaultSessionRef.current?.close()
     vaultSessionRef.current = null
     setSelectedFile(file.name)
@@ -608,6 +617,7 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
   }
 
   async function openDropboxVault(vault: DropboxVaultFile) {
+    setMobileOpenTarget(null)
     if (activateOpenDropboxVault(vault.id)) return
     setOpeningDropboxVaultId(vault.id)
     try {
@@ -621,6 +631,21 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
     } finally {
       setOpeningDropboxVaultId('')
     }
+  }
+
+  function rememberVaultAccess(target: RecentTarget) {
+    setRecentAccessByVault((current) => ({
+      ...current,
+      [activeVaultIdentity]: rememberRecentAccess(current[activeVaultIdentity], target),
+    }))
+  }
+
+  function openRecentShortcut(target: RecentTarget) {
+    if (!vaultSnapshot) return
+    rememberVaultAccess(target)
+    setMobileOpenTarget(target)
+    setMobileNavigationEpoch((current) => current + 1)
+    setView('browse')
   }
 
   function requestDeleteVault(vault: DropboxVaultFile) {
@@ -711,6 +736,7 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
     else vaultSessionRef.current?.close()
     vaultSessionRef.current = null
     setVaultSnapshot(null)
+    setMobileOpenTarget(null)
     setUnlockError('')
     setView('unlock')
   }
@@ -1042,7 +1068,7 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
         <nav className="vault-navigation">
           <button
             className={`sidebar-row sidebar-row-all ${activeView === 'vaults' || activeView === 'create' ? 'is-active' : ''}`}
-            onClick={() => setView(dropboxConnected ? 'vaults' : 'connect')}
+            onClick={() => { setMobileOpenTarget(null); setView(dropboxConnected ? 'vaults' : 'connect') }}
             title="Home"
             type="button"
           >
@@ -1157,7 +1183,30 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
                 </button>
               </div>
 
-              <MobileVaultHome vaults={dropbox.vaults} query={vaultSearch} onQueryChange={setVaultSearch} isOnline={pwa.isOnline} isConnected={dropboxConnected} isLoading={dropbox.status === 'loading'} openingVaultId={openingDropboxVaultId} deletingVaultId={deletingDropboxVaultId} openVaultIds={Object.keys(openDropboxVaultSnapshots)} deviceVaultName={selectedStorage === 'device' ? selectedFile : null} deviceVaultOpen={Boolean(vaultSnapshot)} onRefresh={() => void dropbox.refresh()} onCreate={() => setView('create')} onOpenVault={(vault) => void openDropboxVault(vault)} onDeleteVault={requestDeleteVault} onOpenDeviceVault={() => setView(vaultSnapshot ? 'browse' : 'unlock')} onPickDeviceFile={() => fileInputRef.current?.click()} onSignOut={() => { closeAllVaultSessions(); dropbox.disconnect(); onLockApp() }} />
+              <MobileVaultHome
+                vaults={dropbox.vaults}
+                query={vaultSearch}
+                onQueryChange={setVaultSearch}
+                isOnline={pwa.isOnline}
+                isConnected={dropboxConnected}
+                isLoading={dropbox.status === 'loading'}
+                openingVaultId={openingDropboxVaultId}
+                deletingVaultId={deletingDropboxVaultId}
+                openVaultIds={Object.keys(openDropboxVaultSnapshots)}
+                selectedVaultId={selectedStorage === 'dropbox' ? activeDropboxVaultId : ''}
+                recentVaultName={vaultSnapshot?.databaseName ?? null}
+                recentShortcuts={recentShortcuts}
+                deviceVaultName={selectedStorage === 'device' ? selectedFile : null}
+                deviceVaultOpen={Boolean(vaultSnapshot)}
+                onRefresh={() => void dropbox.refresh()}
+                onCreate={() => setView('create')}
+                onOpenVault={(vault) => void openDropboxVault(vault)}
+                onOpenRecent={openRecentShortcut}
+                onDeleteVault={requestDeleteVault}
+                onOpenDeviceVault={() => { setMobileOpenTarget(null); setView(vaultSnapshot ? 'browse' : 'unlock') }}
+                onPickDeviceFile={() => fileInputRef.current?.click()}
+                onSignOut={() => { closeAllVaultSessions(); dropbox.disconnect(); onLockApp() }}
+              />
 
               {dropbox.error && <p className="unlock-error" role="alert">{dropbox.error}</p>}
             </div>
@@ -1274,8 +1323,9 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
 
           {activeView === 'browse' && vaultSnapshot && (
             <VaultBrowser
-              key={vaultViewIdentity(selectedStorage, activeDropboxVaultId, deviceSelectionId)}
+              key={`${activeVaultIdentity}:${mobileNavigationEpoch}`}
               canEdit={selectedStorage === 'dropbox' && Boolean(activeDropboxVault)}
+              initialMobileTarget={mobileOpenTarget}
               onChangeVaultPassword={changeOpenVaultPassword}
               onEntryDragEnd={clearVaultEntryDrag}
               onEntryDragStart={(entry) => { if (activeDropboxVaultId) setDraggedVaultEntry({ ...entry, sourceVaultId: activeDropboxVaultId }) }}
@@ -1284,6 +1334,7 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
               onDeleteEntry={deleteVaultEntry}
               onDuplicateVault={duplicateOpenVault}
               onEditorActivityChange={setMobileEditorActive}
+              onRecentAccess={rememberVaultAccess}
               onLoadEntry={(entryId) => {
                 const session = vaultSessionRef.current
                 return session ? session.getEntry(entryId) : Promise.reject(new Error('The vault is locked. Open it again before editing an entry.'))
@@ -1310,12 +1361,12 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
       </main>
 
       <nav aria-label="Mobile navigation" className="mobile-dock">
-        <button aria-current={activeView === 'browse' || activeView === 'unlock' ? undefined : 'page'} className={activeView === 'browse' || activeView === 'unlock' ? '' : 'is-active'} onClick={() => mobileEditorActive ? setDiscardMobileDraftOpen(true) : setView(dropboxConnected ? 'vaults' : 'connect')} type="button"><Icon name="home" size={21} /><span>Home</span></button>
-        <button aria-current={activeView === 'browse' || activeView === 'unlock' ? 'page' : undefined} className={activeView === 'browse' || activeView === 'unlock' ? 'is-active' : ''} disabled={!selectedVaultFile && !vaultSnapshot} onClick={() => setView(vaultSnapshot ? 'browse' : 'unlock')} type="button"><Icon name="folder" size={21} /><span>Categories</span></button>
+        <button aria-current={activeView === 'browse' || activeView === 'unlock' ? undefined : 'page'} className={activeView === 'browse' || activeView === 'unlock' ? '' : 'is-active'} onClick={() => { if (mobileEditorActive) setDiscardMobileDraftOpen(true); else { setMobileOpenTarget(null); setView(dropboxConnected ? 'vaults' : 'connect') } }} type="button"><Icon name="home" size={21} /><span>Home</span></button>
+        <button aria-current={activeView === 'browse' || activeView === 'unlock' ? 'page' : undefined} className={activeView === 'browse' || activeView === 'unlock' ? 'is-active' : ''} disabled={mobileEditorActive || (!selectedVaultFile && !vaultSnapshot)} onClick={() => { setMobileOpenTarget(null); setMobileNavigationEpoch((current) => current + 1); setView(vaultSnapshot ? 'browse' : 'unlock') }} type="button"><Icon name="folder" size={21} /><span>Categories</span></button>
       </nav>
 
       <input accept=".kdbx,application/octet-stream" aria-hidden="true" className="visually-hidden" onChange={(event) => { openFile(event.target.files?.[0]); event.currentTarget.value = '' }} ref={fileInputRef} tabIndex={-1} type="file" />
-      {discardMobileDraftOpen && <DiscardMobileDraftDialog onCancel={() => setDiscardMobileDraftOpen(false)} onDiscard={() => { setDiscardMobileDraftOpen(false); setMobileEditorActive(false); setView(dropboxConnected ? 'vaults' : 'connect') }} />}
+      {discardMobileDraftOpen && <DiscardMobileDraftDialog onCancel={() => setDiscardMobileDraftOpen(false)} onDiscard={() => { setDiscardMobileDraftOpen(false); setMobileEditorActive(false); setMobileOpenTarget(null); setView(dropboxConnected ? 'vaults' : 'connect') }} />}
       {vaultToDelete && (
         <DeleteVaultDialog
           error={deleteError}

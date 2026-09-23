@@ -2209,6 +2209,7 @@ h1 {
   .mobile-home-section-heading button:hover, .mobile-home-section-heading button:focus-visible { background: var(--surface-2); }
   .mobile-vault-list { display: grid; gap: 8px; }
   .mobile-vault-item { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) 48px; align-items: stretch; background: var(--surface-1); border: 1px solid var(--border-subtle); border-radius: var(--radius-card); }
+  .mobile-vault-item.is-selected { border-color: var(--border-strong); background: var(--surface-2); }
   .mobile-vault-open { min-width: 0; min-height: 72px; padding: 10px 4px 10px 12px; display: grid; grid-template-columns: 40px minmax(0, 1fr) 18px; align-items: center; gap: 11px; color: var(--text-primary); background: transparent; border: 0; font: inherit; text-align: left; cursor: pointer; }
   .mobile-vault-open > span:nth-child(2) { min-width: 0; display: grid; gap: 3px; }
   .mobile-vault-open strong, .mobile-vault-open small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -2218,6 +2219,20 @@ h1 {
   .mobile-vault-delete { width: 44px; min-height: 44px; place-self: center; display: grid; place-items: center; color: var(--text-tertiary); background: transparent; border: 0; border-radius: var(--radius-control); cursor: pointer; }
   .mobile-vault-delete:hover, .mobile-vault-delete:focus-visible { color: var(--danger); background: color-mix(in srgb, var(--danger) 9%, transparent); }
   .mobile-home-empty { margin: 12px 2px; color: var(--text-tertiary); font-size: 0.84rem; }
+  .mobile-recent { margin-top: 8px; padding-top: 22px; display: grid; gap: 20px; border-top: 1px solid var(--border-subtle); }
+  .mobile-recent-heading .eyebrow { margin: 0 0 4px; }
+  .mobile-recent-heading h2 { margin: 0; font-size: 1.08rem; line-height: 1.3; letter-spacing: -0.02em; }
+  .mobile-recent-group { display: grid; }
+  .mobile-recent-group h3 { margin: 0 0 4px; color: var(--text-tertiary); font-family: var(--font-system); font-size: 0.7rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+  .mobile-recent-row { width: 100%; min-height: 60px; padding: 9px 3px; display: grid; grid-template-columns: 23px minmax(0, 1fr) 18px; align-items: center; gap: 10px; color: var(--text-primary); background: transparent; border: 0; border-bottom: 1px solid var(--border-subtle); font: inherit; text-align: left; cursor: pointer; }
+  .mobile-recent-row:hover, .mobile-recent-row:focus-visible { background: var(--surface-hover); }
+  .mobile-recent-row > span:nth-child(2) { min-width: 0; display: grid; gap: 3px; }
+  .mobile-recent-row strong, .mobile-recent-row small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mobile-recent-row strong { font-size: 0.86rem; font-weight: 650; }
+  .mobile-recent-row small { color: var(--text-tertiary); font-size: 0.72rem; }
+  .mobile-recent-icon, .mobile-recent-row > svg { color: var(--text-tertiary); }
+  .mobile-recent-icon { display: grid; place-items: center; }
+  .mobile-recent-empty { margin: 0; color: var(--text-tertiary); font-size: 0.83rem; line-height: 1.5; }
   .mobile-device-vault, .mobile-open-device { min-height: 48px; padding: 10px 12px; display: flex; align-items: center; gap: 10px; color: var(--text-secondary); background: var(--surface-1); border: 1px solid var(--border-subtle); border-radius: var(--radius-control); font: inherit; font-size: 0.8rem; text-align: left; cursor: pointer; }
   .mobile-device-vault span { min-width: 0; flex: 1; display: grid; gap: 2px; }
   .mobile-device-vault small { color: var(--text-tertiary); font-size: 0.7rem; }
