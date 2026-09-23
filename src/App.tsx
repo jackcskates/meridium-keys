@@ -4,6 +4,7 @@ import { ConnectionSkeleton, VaultListSkeleton } from './components/LoadingSkele
 import { MobileVaultHome } from './components/MobileVaultHome'
 import { appPasswordIsConfigured, clearAppPassword, configureAppPassword, verifyAppPassword } from './features/app-lock/verifyAppPassword'
 import { forgetDropboxRefreshToken } from './features/dropbox/credentialStore'
+import { dropboxContentHash } from './features/dropbox/contentHash'
 import type { DropboxVaultFile } from './features/dropbox/types'
 import { useDropbox } from './features/dropbox/useDropbox'
 import { usePwaLifecycle } from './features/pwa/usePwaLifecycle'
@@ -15,7 +16,9 @@ import { vaultPasswordRequirements } from './features/vault/passwordPolicy'
 import { persistPreparedChange, VaultSessionRecoveryError } from './features/vault/persistChange'
 import type { VaultEntryDraft, VaultEntrySummary, VaultGroupDraft, VaultMoveDestination, VaultSnapshot } from './features/vault/types'
 import { openVaultSession, type PreparedVaultChange, type UnlockedVaultSession, type UnlockStage } from './features/vault/unlockVault'
+import { unlockInputWarning } from './features/vault/unlockInputDiagnostics'
 import { vaultViewIdentity } from './features/vault/vaultViewIdentity'
+import type { VaultOpenErrorCode } from './features/vault/types'
 import { rememberRecentAccess, resolveRecentAccess, type RecentHistory, type RecentTarget } from './features/vault/recentAccess'
 import './App.css'
 
@@ -493,15 +496,21 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
   const [deviceSelectionId, setDeviceSelectionId] = useState(0)
   const [activeDropboxVaultId, setActiveDropboxVaultId] = useState('')
   const [activeDropboxVault, setActiveDropboxVault] = useState<DropboxVaultFile | null>(null)
+  const [downloadedRevisionVerified, setDownloadedRevisionVerified] = useState(false)
+  const [lastDeviceFileFingerprint, setLastDeviceFileFingerprint] = useState<{ name: string; hash: string } | null>(null)
   const [openingDropboxVaultId, setOpeningDropboxVaultId] = useState('')
   const [vaultToDelete, setVaultToDelete] = useState<DropboxVaultFile | null>(null)
   const [deletingDropboxVaultId, setDeletingDropboxVaultId] = useState('')
   const [deleteError, setDeleteError] = useState('')
   const [vaultSnapshot, setVaultSnapshot] = useState<VaultSnapshot | null>(null)
   const [unlockError, setUnlockError] = useState('')
+  const [vaultOpenError, setVaultOpenError] = useState('')
+  const [unlockFailureCode, setUnlockFailureCode] = useState<VaultOpenErrorCode | null>(null)
+  const [unlockInputHint, setUnlockInputHint] = useState<string | null>(null)
   const [unlockStage, setUnlockStage] = useState<UnlockStage | null>(null)
   const [isUnlocking, setIsUnlocking] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const deviceHashRequestRef = useRef(0)
   const vaultSessionRef = useRef<UnlockedVaultSession | null>(null)
   const openDropboxVaultsRef = useRef<Map<string, OpenDropboxVault>>(new Map())
   const [openDropboxVaultSnapshots, setOpenDropboxVaultSnapshots] = useState<Record<string, VaultSnapshot>>({})
@@ -595,12 +604,21 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
 
   function openFile(file?: File, storage: 'device' | 'dropbox' = 'device') {
     if (!file) return
+    setVaultOpenError('')
+    setUnlockFailureCode(null)
+    setUnlockInputHint(null)
     setMobileOpenTarget(null)
     if (selectedStorage === 'device') vaultSessionRef.current?.close()
     vaultSessionRef.current = null
     setSelectedFile(file.name)
     setSelectedStorage(storage)
     if (storage === 'device') {
+      const requestId = ++deviceHashRequestRef.current
+      setLastDeviceFileFingerprint(null)
+      void dropboxContentHash(file).then((hash) => {
+        if (requestId === deviceHashRequestRef.current) setLastDeviceFileFingerprint({ name: file.name, hash })
+      }).catch(() => undefined)
+      setDownloadedRevisionVerified(false)
       setDeviceSelectionId((current) => current + 1)
       setActiveDropboxVaultId('')
       setActiveDropboxVault(null)
@@ -617,16 +635,20 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
   }
 
   async function openDropboxVault(vault: DropboxVaultFile) {
+    setVaultOpenError('')
+    setUnlockFailureCode(null)
+    setUnlockInputHint(null)
     setMobileOpenTarget(null)
     if (activateOpenDropboxVault(vault.id)) return
     setOpeningDropboxVaultId(vault.id)
     try {
-      const file = await dropbox.download(vault)
+      const downloaded = await dropbox.download(vault)
       setActiveDropboxVaultId(vault.id)
-      setActiveDropboxVault(vault)
-      openFile(file, 'dropbox')
+      setActiveDropboxVault(downloaded.vault)
+      setDownloadedRevisionVerified(downloaded.revisionVerified)
+      openFile(downloaded.file, 'dropbox')
     } catch (error) {
-      setUnlockError(error instanceof Error ? error.message : `${vault.name} could not be opened from Dropbox.`)
+      setVaultOpenError(error instanceof Error ? error.message : `${vault.name} could not be opened from Dropbox.`)
       setView('vaults')
     } finally {
       setOpeningDropboxVaultId('')
@@ -684,6 +706,8 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
   }
 
   async function submitUnlock() {
+    setUnlockFailureCode(null)
+    setUnlockInputHint(null)
     const passwordInput = vaultPasswordInputRef.current
     if (!passwordInput) return
     const password = passwordInput.value
@@ -721,6 +745,8 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
       setView('browse')
     } catch (error) {
       setUnlockError(error instanceof VaultOpenError ? error.message : 'The vault could not be opened safely.')
+      setUnlockFailureCode(error instanceof VaultOpenError ? error.code : 'WORKER_FAILURE')
+      if (error instanceof VaultOpenError && error.code === 'INVALID_CREDENTIALS') setUnlockInputHint(unlockInputWarning(password))
       window.requestAnimationFrame(() => {
         vaultPasswordInputRef.current?.focus()
         vaultPasswordInputRef.current?.select()
@@ -1172,6 +1198,7 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
           {activeView === 'vaults' && (
             <div className="vault-chooser">
               <h1 className="visually-hidden">Vault actions</h1>
+              {vaultOpenError && <p className="unlock-error" role="alert">{vaultOpenError}</p>}
               <div className="choice-grid">
                 <button className="choice-card choice-primary" onClick={() => setView('create')} type="button">
                   <span className="choice-icon"><Icon name="plus" size={26} /></span>
@@ -1309,6 +1336,8 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
                 <p className="eyebrow">Locked vault</p>
                 <h1 id="unlock-vault-title">{selectedFile.replace(/\.kdbx$/i, '')}</h1>
                 <p className="lede">Enter this vault's master password. It will not be saved.</p>
+                {selectedStorage === 'dropbox' && activeDropboxVault && <p className="vault-unlock-source">Dropbox account: {dropbox.session?.accountName || 'Connected account'}<br />Dropbox file: {activeDropboxVault.pathDisplay}<br />{downloadedRevisionVerified ? 'Downloaded' : 'Listed'} revision: {activeDropboxVault.rev} · {selectedVaultFile?.size.toLocaleString()} downloaded bytes</p>}
+                {selectedStorage === 'dropbox' && activeDropboxVault?.contentHash && lastDeviceFileFingerprint && <p className="vault-unlock-source" role="status">Compared with {lastDeviceFileFingerprint.name} opened from this device: {lastDeviceFileFingerprint.hash === activeDropboxVault.contentHash ? 'identical encrypted bytes' : 'different encrypted bytes'}. {lastDeviceFileFingerprint.hash !== activeDropboxVault.contentHash && 'This Dropbox connection is not downloading the same file.'}</p>}
               </div>
               <label className="field">
                 <span>Master password</span>
@@ -1316,8 +1345,11 @@ function KeysWorkspace({ onLockApp }: { onLockApp: () => void }) {
               </label>
               <p className="field-note">Vault passwords are case-sensitive. Every space and punctuation mark must match exactly.</p>
               {unlockError && <p className="unlock-error" role="alert">{unlockError}</p>}
+              {unlockInputHint && <p className="unlock-error" role="status">{unlockInputHint}</p>}
+              {unlockFailureCode === 'INVALID_CREDENTIALS' && unlockError && <p className="field-note">Use the eye icon to check the exact text entered. If a local copy opens with this password, compare its encrypted bytes with this Dropbox download above.</p>}
               <button className="button button-primary button-wide" disabled={isUnlocking} onClick={() => void submitUnlock()} type="button"><Icon name="key" />{isUnlocking ? `${unlockStage === 'mapping' ? 'Preparing' : unlockStage === 'reading' ? 'Reading' : 'Decrypting'} vault…` : 'Unlock vault'}</button>
               <button className="text-button" disabled={isUnlocking} onClick={() => fileInputRef.current?.click()} type="button">Choose another KDBX file</button>
+              <p className="app-build">Build {__APP_BUILD_ID__}</p>
             </div>
           )}
 

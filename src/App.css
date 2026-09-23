@@ -1016,6 +1016,8 @@ h1 {
 .unlock-card .back-button { align-self: flex-start; }
 .unlock-card .field { width: 100%; text-align: left; }
 
+.vault-unlock-source { margin: 2px 0 0; color: var(--text-tertiary); font-family: var(--font-system); font-size: 0.72rem; line-height: 1.5; overflow-wrap: anywhere; }
+
 .vault-seal {
   position: relative;
   width: 62px;

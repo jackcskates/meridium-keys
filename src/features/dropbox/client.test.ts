@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { deleteDropboxVault, downloadDropboxVault, listDropboxVaults, loadDropboxAccount, renameDropboxVault, uploadDropboxVaultRevision, uploadNewDropboxVault } from './client'
 import type { DropboxSession, DropboxVaultFile } from './types'
+import { dropboxContentHash } from './contentHash'
 
 const session: DropboxSession = {
   accessToken: 'test-access-token',
@@ -58,10 +59,45 @@ describe('Dropbox client', () => {
       serverModified: '2026-09-09T00:00:00Z',
     }
 
-    const file = await downloadDropboxVault(session, vault)
+    const downloaded = await downloadDropboxVault(session, vault)
 
-    expect(file.name).toBe('Personal.kdbx')
-    expect(new Uint8Array(await file.arrayBuffer())).toEqual(bytes)
+    expect(downloaded.file.name).toBe('Personal.kdbx')
+    expect(new Uint8Array(await downloaded.file.arrayBuffer())).toEqual(bytes)
+    expect(downloaded.vault).toMatchObject(vault)
+    expect(downloaded.vault.contentHash).toMatch(/^[0-9a-f]{64}$/)
+    expect(downloaded.revisionVerified).toBe(false)
+  })
+
+  it('uses the revision returned with the downloaded bytes rather than a stale listing', async () => {
+    const bytes = new Uint8Array([3, 217, 162, 154])
+    const contentHash = await dropboxContentHash(new Blob([bytes]))
+    const listed: DropboxVaultFile = { id: 'id:vault', name: 'Personal.kdbx', pathDisplay: '/Personal.kdbx', rev: 'old', size: bytes.length, serverModified: '2026-09-09T00:00:00Z' }
+    const metadata = { id: 'id:vault', name: 'Personal.kdbx', path_display: '/Personal.kdbx', rev: 'latest', size: bytes.length, server_modified: '2026-09-23T00:00:00Z', content_hash: contentHash }
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(bytes, { status: 200, headers: { 'Dropbox-API-Result': JSON.stringify(metadata) } })))
+
+    const downloaded = await downloadDropboxVault(session, listed)
+
+    expect(downloaded.vault.rev).toBe('latest')
+    expect(downloaded.vault.contentHash).toBe(contentHash)
+    expect(downloaded.revisionVerified).toBe(true)
+  })
+
+  it('rejects a mismatched Dropbox file identity before attempting to unlock it', async () => {
+    const listed: DropboxVaultFile = { id: 'id:vault', name: 'Personal.kdbx', pathDisplay: '/Personal.kdbx', rev: 'old', size: 2, serverModified: '2026-09-09T00:00:00Z' }
+    const metadata = { id: 'id:other', name: 'Personal.kdbx', path_display: '/Personal.kdbx', rev: 'latest', size: 2, server_modified: '2026-09-23T00:00:00Z' }
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(new Uint8Array([1, 2]), { status: 200, headers: { 'Dropbox-API-Result': JSON.stringify(metadata) } })))
+
+    await expect(downloadDropboxVault(session, listed)).rejects.toThrow('different vault file')
+  })
+
+  it('rejects downloaded bytes that do not match Dropbox metadata', async () => {
+    const bytes = new Uint8Array([1, 2, 3])
+    const otherHash = await dropboxContentHash(new Blob([new Uint8Array([4, 5, 6])]))
+    const listed: DropboxVaultFile = { id: 'id:vault', name: 'Archive.kdbx', pathDisplay: '/Archive.kdbx', rev: 'old', size: bytes.length, serverModified: '2026-09-09T00:00:00Z' }
+    const metadata = { id: 'id:vault', name: 'Archive.kdbx', path_display: '/Archive.kdbx', rev: 'latest', size: bytes.length, server_modified: '2026-09-23T00:00:00Z', content_hash: otherHash }
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(bytes, { status: 200, headers: { 'Dropbox-API-Result': JSON.stringify(metadata) } })))
+
+    await expect(downloadDropboxVault(session, listed)).rejects.toThrow('do not match its file hash')
   })
 
   it('deletes the exact Dropbox revision without requiring the vault password', async () => {

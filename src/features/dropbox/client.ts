@@ -1,4 +1,5 @@
 import type { DropboxSession, DropboxVaultFile } from './types'
+import { dropboxContentHash } from './contentHash'
 
 const apiEndpoint = 'https://api.dropboxapi.com/2'
 const contentEndpoint = 'https://content.dropboxapi.com/2'
@@ -11,6 +12,7 @@ type DropboxEntry = {
   rev?: string
   size?: number
   server_modified?: string
+  content_hash?: string
 }
 
 type ListFolderResponse = {
@@ -73,6 +75,7 @@ function mapVault(entry: DropboxEntry, directFileMetadata = false): DropboxVault
     rev: entry.rev,
     size: entry.size,
     serverModified: entry.server_modified,
+    contentHash: entry.content_hash,
   }
 }
 
@@ -111,8 +114,30 @@ export async function downloadDropboxVault(session: DropboxSession, vault: Dropb
       ? 'The Dropbox connection expired. Connect again.'
       : `${vault.name} could not be downloaded from Dropbox.`)
   }
-
-  return new File([await response.arrayBuffer()], vault.name, { type: 'application/octet-stream' })
+  const resultHeader = response.headers.get('Dropbox-API-Result')
+  let downloadedVault = vault
+  if (resultHeader) {
+    let metadata: DropboxVaultFile | null
+    try {
+      metadata = mapVault(JSON.parse(resultHeader) as DropboxEntry, true)
+    } catch {
+      throw new DropboxApiError('Dropbox returned unreadable metadata for the downloaded vault. No vault data was opened.')
+    }
+    if (!metadata || metadata.id !== vault.id) throw new DropboxApiError('Dropbox returned a different vault file. No vault data was opened.')
+    downloadedVault = metadata
+  }
+  const data = await response.arrayBuffer()
+  if (data.byteLength !== downloadedVault.size) throw new DropboxApiError('The downloaded vault was incomplete. Try downloading it again.')
+  const file = new File([data], downloadedVault.name, { type: 'application/octet-stream' })
+  const contentHash = await dropboxContentHash(file)
+  if (downloadedVault.contentHash && contentHash !== downloadedVault.contentHash) {
+    throw new DropboxApiError('Dropbox returned vault bytes that do not match its file hash. No vault data was opened.')
+  }
+  return {
+    file,
+    vault: { ...downloadedVault, contentHash },
+    revisionVerified: Boolean(resultHeader),
+  }
 }
 
 export async function deleteDropboxVault(session: DropboxSession, vault: DropboxVaultFile) {

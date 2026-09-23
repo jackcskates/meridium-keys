@@ -19,4 +19,5 @@ export type DropboxVaultFile = {
   rev: string
   size: number
   serverModified: string
+  contentHash?: string
 }
